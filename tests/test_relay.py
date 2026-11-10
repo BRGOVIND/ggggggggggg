@@ -21,7 +21,12 @@ from relay.pipeline import REFUSAL, CallStats, answer_question, call_with_retry
 from relay.probe_followup import infer_timeout_count, save_call, send_call
 from relay.probe_nine import load_probe_questions, planned_tokens, probe_step
 from relay.report import delivered, table3, validate_rows
-from relay.retry_experiment import local_url
+from relay.retry_experiment import (
+    affected_first_successes,
+    censored_percentile,
+    local_url,
+    retry_made_worse,
+)
 from relay.run import CSV_FIELDS, Dispatcher, queue_deadline
 from relay.standin import StandInState, rate_error
 
@@ -240,6 +245,47 @@ def test_retry_experiment_is_local_only():
     assert local_url("http://127.0.0.1:8000") == "http://127.0.0.1:8000"
     with pytest.raises(ValueError, match="local stand-in"):
         local_url("https://api.groq.com/openai/v1")
+
+
+def test_retry_delivery_percentiles_keep_all_arrivals():
+    answered = [
+        SimpleNamespace(answer=SimpleNamespace(
+            status="ok", answer_kind="full", total_ms=350 + number,
+        ))
+        for number in range(10)
+    ]
+    missing = [
+        SimpleNamespace(answer=SimpleNamespace(
+            status="rate_limited", answer_kind="none", total_ms=20_000,
+        ))
+        for _ in range(30)
+    ]
+    assert censored_percentile(answered + missing, 0.5) is None
+    assert censored_percentile(answered + missing, 0.95) is None
+    assert censored_percentile(answered, 0.95) == 359
+    assert retry_made_worse(9, 10, 350, 350)
+    assert retry_made_worse(10, 10, None, 350)
+    assert not retry_made_worse(10, 10, 350, 350)
+
+
+def test_retry_affected_first_successes_counts_displaced_and_slower():
+    def entry(status, first_status, total, started, finished, retry_start=None, retry_end=None):
+        return SimpleNamespace(
+            answer=SimpleNamespace(status=status, total_ms=total),
+            first_attempt_status=first_status,
+            first_attempt_started_at=started,
+            first_attempt_finished_at=finished,
+            retry_started_at=retry_start,
+            retry_finished_at=retry_end,
+        )
+
+    baseline = [entry("ok", "ok", 100, 1, 1.1) for _ in range(3)]
+    current = [
+        entry("rate_limited", "rate_limited", 200, 3, 3.1),
+        entry("ok", "rate_limited", 200, 2, 2.1, 2.5, 3.5),
+        entry("ok", "ok", 150, 3, 3.2),
+    ]
+    assert affected_first_successes(current, baseline) == ([0], [2])
 
 
 def test_retry_only_once_after_429_with_retry_after():

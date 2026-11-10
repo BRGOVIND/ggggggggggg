@@ -141,9 +141,9 @@ def table2(rows: list[dict]) -> None:
         if row["source"] != "stand-in" or row["scenario"] not in LOAD_SCENARIOS:
             continue
         groups[row["run_id"]].append(row)
-    print("## Table 2a: latency (delivered answers only; compressed runs in virtual ms)")
+    print("## Table 2a: latency (delivered answers only; 5x time-compressed runs in virtual ms)")
     print(
-        "| Pass | Scenario | Deadline s | latency_spread_ms | Scale | Seed | Sent | Answered | Duration s | Offered/min | First token p50/p95/p99 ms | Total p50/p95/p99 ms |"
+        "| Pass | Scenario | Deadline s | latency_spread_ms | Clock | Seed | Sent | Answered | Duration s | Offered/min | First token p50/p95/p99 ms | Total p50/p95/p99 ms |"
     )
     print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
     for group in ordered_load_groups(groups):
@@ -154,15 +154,15 @@ def table2(rows: list[dict]) -> None:
         answered = [row for row in group if delivered(row)]
         print(
             f"| {first.get('run_label', '')} | {first['scenario']} | {first['queue_deadline_s']} | "
-            f"{spread:.1f} | {first.get('time_scale') or 1} | {first.get('seed', '')} | "
+            f"{spread:.1f} | {first.get('clock_label') or 'real time'} | {first.get('seed', '')} | "
             f"{len(group)} | {len(answered)} | {duration:.1f} | {offered:.1f} | "
             f"{latency(answered, 'first_token_ms', PERCENTILES)} | {latency(answered, 'total_ms', PERCENTILES)} |"
         )
     print("\n## Table 2b: outcomes")
     print(
-        "| Pass | Scenario | Deadline s | latency_spread_ms | Full % (count) | Excerpt % (count) | Rate-limited % (count) | Timeout/given-up % (count) | Retries/request | Peak queue | Tokens/answer | Cost/1,000 answers |"
+        "| Pass | Scenario | Deadline s | Clock | latency_spread_ms | Full % (count) | Excerpt % (count) | Rate-limited % (count) | Timeout/given-up % (count) | Retries/request | Peak queue | Tokens/answer | Cost/1,000 answers |"
     )
-    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for group in ordered_load_groups(groups):
         first = group[0]
         retries = sum(int(row["retries"]) for row in group) / len(group)
@@ -170,6 +170,7 @@ def table2(rows: list[dict]) -> None:
         spread = float(first.get("latency_spread_ms") or 0)
         print(
             f"| {first.get('run_label', '')} | {first['scenario']} | {first['queue_deadline_s']} | "
+            f"{first.get('clock_label') or 'real time'} | "
             f"{spread:.1f} | "
             f"{count_percentage(group, lambda row: delivered(row) and row.get('answer_kind', 'full') == 'full')} | "
             f"{count_percentage(group, lambda row: delivered(row) and row.get('answer_kind') == 'excerpt')} | "

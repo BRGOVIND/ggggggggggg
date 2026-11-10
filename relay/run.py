@@ -112,7 +112,10 @@ CSV_FIELDS = [
     "answer_kind",
     "run_label",
     "time_scale",
+    "clock_label",
     "retry_arm",
+    "arrival_pattern",
+    "first_attempt_status",
     "http_attempts",
 ]  # Keep all required fields first; extras reproduce tables and calibration.
 
@@ -125,6 +128,12 @@ def percentile(values: list[float], fraction: float) -> float:
     lower = int(position)
     upper = min(lower + 1, len(ordered) - 1)
     return ordered[lower] + (ordered[upper] - ordered[lower]) * (position - lower)
+
+
+def clock_label(scale: float) -> str:
+    if scale == 1:
+        return "real time"
+    return f"{scale:g}x time-compressed"
 
 
 def queue_deadline(calibration_path: Path) -> tuple[float, str]:
@@ -376,7 +385,10 @@ def result_row(
         ),
         "run_label": getattr(args, "run_label", ""),
         "time_scale": getattr(args, "time_scale", 1.0),
+        "clock_label": clock_label(getattr(args, "time_scale", 1.0)),
         "retry_arm": getattr(args, "retry_arm", ""),
+        "arrival_pattern": getattr(args, "arrival_pattern", ""),
+        "first_attempt_status": getattr(args, "first_attempt_status", ""),
     }
     row.update(asdict(answer))
     return row
