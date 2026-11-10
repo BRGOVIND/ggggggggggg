@@ -10,5 +10,12 @@ groq_budget_ledger.jsonl.lock
 evaluation_raw.jsonl
 probe_*_raw.jsonl
 results_before_standin_load.csv
+results_before_pass2.csv
 steady_deadline_*.csv
+steady_pass2_*.csv
+steady_pass2_*_attempts.jsonl
+*_attempts_raw.jsonl
+attempts_raw.jsonl
+pass2_attempts_raw.jsonl
+retry_attempts_raw.jsonl
 standin*.log

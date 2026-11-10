@@ -53,6 +53,8 @@ def probe_answer(
         model_total_ms=reply.total_ms if reply else 0,
         provider_first_chunk_ms=reply.first_chunk_ms if reply else None,
         model_chunk_count=reply.chunk_count if reply else 0,
+        answer_kind="full" if status == "ok" else "none",
+        http_attempts=1,
     )
 
 

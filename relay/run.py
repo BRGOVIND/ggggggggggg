@@ -37,7 +37,7 @@ ASSUMED_DEADLINE_MARGIN_S = 1.0  # Leave one extra second around a short probe s
 QUEUE_SIZE = 20  # Bound memory and give-up latency during bursts.
 WORKERS = 2  # Match a cautious number of simultaneous provider calls.
 DEFAULT_SEED = 7  # Reproduce stand-in hang and latency draws.
-DEFAULT_JITTER_MS = 300.0  # Used only when no calibration file exists.
+DEFAULT_LATENCY_SPREAD_MS = 300.0  # Used only when no calibration file exists.
 
 QUESTIONS = [
     "What scaling factor is applied to dot products in scaled dot-product attention?",
@@ -108,7 +108,12 @@ CSV_FIELDS = [
     "evaluation_group",
     "itpm",
     "seed",
-    "jitter_ms",
+    "latency_spread_ms",
+    "answer_kind",
+    "run_label",
+    "time_scale",
+    "retry_arm",
+    "http_attempts",
 ]  # Keep all required fields first; extras reproduce tables and calibration.
 
 
@@ -274,11 +279,14 @@ class Dispatcher:
 
 async def configure_standin(
     url: str, scenario: str, limits: Limits, calibration_path: Path,
-    seed: int, no_jitter: bool,
+    seed: int, no_latency_spread: bool, time_scale: float,
 ) -> float:
+    if time_scale != 1 and not calibration_path.exists():
+        raise ValueError("Compressed runs need stand-in calibration")
     changes = {
         "reset": True,
         "seed": seed,
+        "time_scale": time_scale,
         "rpm": limits.requests_per_minute,
         "tpm": limits.tokens_per_minute,
         "itpm": limits.input_tokens_per_minute or 7000,
@@ -291,7 +299,7 @@ async def configure_standin(
         measured = json.loads(calibration_path.read_text(encoding="utf-8"))
         for field in (
             "base_ms",
-            "jitter_ms",
+            "latency_spread_ms",
             "chunk_ms",
             "slow_per_active_ms",
             "rpm_burst_fraction",
@@ -300,8 +308,15 @@ async def configure_standin(
             "hang_ms",
         ):
             changes[field] = measured[field]
-    jitter_ms = 0.0 if no_jitter else float(changes.get("jitter_ms", DEFAULT_JITTER_MS))
-    changes["jitter_ms"] = jitter_ms
+    latency_spread_ms = 0.0 if no_latency_spread else float(
+        changes.get("latency_spread_ms", DEFAULT_LATENCY_SPREAD_MS)
+    )
+    changes["latency_spread_ms"] = latency_spread_ms
+    for field in (
+        "base_ms", "latency_spread_ms", "chunk_ms", "slow_per_active_ms", "hang_ms"
+    ):
+        if field in changes:
+            changes[field] /= time_scale
     if scenario == "minute_halved":
         changes["tpm"] = max(1, limits.tokens_per_minute // 2)
     if scenario == "daily_exhausted":
@@ -309,7 +324,7 @@ async def configure_standin(
     if scenario == "retry_failure":
         changes["fail_probability"] = 1.0
     await set_standin_options(url, changes)
-    return jitter_ms
+    return latency_spread_ms
 
 
 def result_row(
@@ -348,14 +363,20 @@ def result_row(
         "pieces_requested": setting.pieces if setting else "",
         "rerank": "no" if setting else "",
         "limits_basis": getattr(args, "limits_basis", "assumed"),
-        "workers": WORKERS if scenario in SCENARIOS else 1,
+        "workers": getattr(args, "workers", WORKERS if scenario in SCENARIOS else 1),
         "cost_usd": 0.0,
         "model_id": args.model
         or ("qwen/qwen3.8-27b" if args.source == "real" else "stand-in"),
         "evaluation_group": getattr(args, "evaluation_group", "") or "",
         "itpm": getattr(args, "itpm", None) or "",
         "seed": args.seed if args.source == "stand-in" else "",
-        "jitter_ms": getattr(args, "jitter_ms", "") if args.source == "stand-in" else "",
+        "latency_spread_ms": (
+            getattr(args, "latency_spread_ms", "")
+            if args.source == "stand-in" else ""
+        ),
+        "run_label": getattr(args, "run_label", ""),
+        "time_scale": getattr(args, "time_scale", 1.0),
+        "retry_arm": getattr(args, "retry_arm", ""),
     }
     row.update(asdict(answer))
     return row
@@ -384,18 +405,23 @@ async def run_scenario(
     basis: str,
 ) -> list[dict]:
     count, spacing_s, duration_s = SCENARIOS[scenario]
+    if args.spacing_s is not None:
+        spacing_s = args.spacing_s
+        duration_s = count * spacing_s
+    scale = args.time_scale if args.source == "stand-in" else 1.0
     limits = load_limits(args)
     if args.source == "stand-in":
-        args.jitter_ms = await configure_standin(
-            args.url, scenario, limits, args.standin_calibration, args.seed, args.no_jitter
+        args.latency_spread_ms = await configure_standin(
+            args.url, scenario, limits, args.standin_calibration,
+            args.seed, args.no_latency_spread, scale,
         )
-    budget = Budget(limits)
+    budget = Budget(limits, time_scale=scale)
     dispatcher = Dispatcher(
         indexes[args.setting],
         model,
         budget,
         args.verifier,
-        deadline_s,
+        deadline_s / scale,
         indexes["small"],
     )
     await dispatcher.start()
@@ -407,7 +433,7 @@ async def run_scenario(
         if scenario == "steady" and (number + 1) % 3 == 0:
             print(f"steady: offered {number + 1}/{count}", flush=True)
         if number + 1 < count:
-            await asyncio.sleep(spacing_s)
+            await asyncio.sleep(spacing_s / scale)
     answers = await asyncio.gather(*tasks)
     await dispatcher.close()
     rows = [
@@ -452,6 +478,12 @@ async def main(args: argparse.Namespace) -> None:
         )
     if args.model is None:
         args.model = "qwen/qwen3.8-27b" if args.source == "real" else "stand-in"
+    if args.time_scale <= 0:
+        raise ValueError("Time scale must be positive")
+    if args.source != "stand-in" and args.time_scale != 1:
+        raise ValueError("Time compression is stand-in only")
+    if args.spacing_s is not None and (args.scenario != "steady" or args.spacing_s <= 0):
+        raise ValueError("--spacing-s requires steady and a positive interval")
     indexes = build_indexes(PAPER_FOLDER)
     deadline_s, basis = queue_deadline(args.calibration)
     if args.deadline_s is not None:
@@ -459,8 +491,8 @@ async def main(args: argparse.Namespace) -> None:
         basis = "assumed_probe_derived" if abs(deadline_s - 2.29) < 0.001 else "experimental_fixed"
     if deadline_s <= 0:
         raise ValueError("Deadline must be positive")
-    if args.no_jitter and args.scenario != "minute_halved":
-        raise ValueError("--no-jitter is only for the minute_halved scenario")
+    if args.no_latency_spread and args.scenario != "minute_halved":
+        raise ValueError("--no-latency-spread is only for the minute_halved scenario")
     scenarios = (
         ["steady", "burst", "overload", "minute_halved", "daily_exhausted"]
         if args.scenario == "all"
@@ -476,12 +508,16 @@ async def main(args: argparse.Namespace) -> None:
         args.model,
         os.getenv("GROQ_API_KEY", "") if args.source == "real" else "",
         daily_guard=guard,
+        raw_log=args.attempt_log,
     )
     try:
         for scenario in scenarios:
             rows = await run_scenario(args, scenario, indexes, model, deadline_s, basis)
             append_rows(args.output, rows)
-            succeeded = sum(row["status"] == "ok" for row in rows)
+            succeeded = sum(
+                row["status"] == "ok" and row["answer_kind"] in ("full", "excerpt")
+                for row in rows
+            )
             print(
                 f"{scenario}: {succeeded}/{len(rows)} ok; peak queue {rows[0]['peak_queue']}"
             )
@@ -509,8 +545,12 @@ if __name__ == "__main__":
     parser.add_argument("--tpd", type=int, default=200000)
     parser.add_argument("--itpm", type=int, default=7000)
     parser.add_argument("--deadline-s", type=float)
+    parser.add_argument("--spacing-s", type=float)
+    parser.add_argument("--time-scale", type=float, default=1.0)
+    parser.add_argument("--run-label", default="")
+    parser.add_argument("--attempt-log", type=Path, default=Path("attempts_raw.jsonl"))
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
-    parser.add_argument("--no-jitter", action="store_true")
+    parser.add_argument("--no-latency-spread", action="store_true")
     parser.add_argument(
         "--limits-basis", choices=["assumed", "account_console"], default="assumed"
     )

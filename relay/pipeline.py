@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
@@ -15,6 +15,7 @@ DRAFT_MAX_TOKENS = 400  # Keep answers short enough for the free token budget.
 VERIFY_MAX_TOKENS = 64  # A support verdict needs only a few words.
 MAX_DRAFT_CHARS = 3200  # Cover long text from the draft's 400-token output cap.
 MAX_ATTEMPTS = 2  # A second failure costs more than most requests can tolerate.
+EXCERPT_WORDS = 70  # Keep pressure fallback short and clearly incomplete.
 CITATION_PATTERN = re.compile(r"\[P(\d+)\]")  # Only retrieved passage IDs may be cited.
 REFUSAL = "I cannot answer that from the three supplied papers."
 DAILY_REPLY = "The daily model budget is exhausted. I cannot check the papers right now. Please try after the quota resets."
@@ -45,6 +46,8 @@ class Answer:
     model_total_ms: float = 0.0
     provider_first_chunk_ms: float | None = None
     model_chunk_count: int = 0
+    answer_kind: str = "none"
+    http_attempts: int = 0
 
 
 @dataclass
@@ -52,6 +55,8 @@ class CallStats:
     retries: int = 0
     retry_ms: float = 0.0
     wait_ms: float = 0.0
+    headers: list[dict[str, str]] = field(default_factory=list)
+    http_attempts: int = 0
 
 
 def passage_context(passages: list[Passage]) -> str:
@@ -132,16 +137,24 @@ def defer_under_pressure(
 ) -> Answer:
     started = time.perf_counter()
     passages = index.search(question)
-    citations = ", ".join(f"[{passage.citation}]" for passage in passages[:2])
     text = MINUTE_REPLY
-    if citations:
-        text += f" Possible source pages: {citations}. I cannot verify an answer now."
+    answer_kind = "none"
+    if passages:
+        words = passages[0].text.split()
+        excerpt = " ".join(words[:EXCERPT_WORDS])
+        if len(words) > EXCERPT_WORDS:
+            excerpt += " ..."
+        text = (
+            f"Retrieved passage (not verified as an answer) "
+            f"[{passages[0].citation}]: {excerpt}"
+        )
+        answer_kind = "excerpt"
     finished = time.perf_counter()
     queue_ms = (started - submitted_at) * 1000
     total_ms = (finished - submitted_at) * 1000
     return Answer(
         text=text,
-        status="rate_limited",
+        status="ok" if answer_kind == "excerpt" else "rate_limited",
         given_up=False,
         first_token_ms=total_ms,
         total_ms=total_ms,
@@ -157,6 +170,7 @@ def defer_under_pressure(
         retrieval_setting=index.setting.name,
         passages=len(passages),
         error="minute_pressure",
+        answer_kind=answer_kind,
     )
 
 
@@ -183,11 +197,16 @@ async def call_with_retry(
         call_started = time.perf_counter()
         try:
             remaining = max(0.0, deadline - time.perf_counter())
+            if remaining <= 0:
+                raise asyncio.TimeoutError
+            stats.http_attempts += 1
             reply = await asyncio.wait_for(
                 model.complete(prompt, max_tokens), timeout=remaining
             )
+            stats.headers.append(reply.headers)
             return reply
         except ModelFailure as error:
+            stats.headers.append(error.headers)
             daily = is_daily_limit(error)
             await budget.provider_limit(error.retry_after_s, daily)
             if daily:
@@ -224,7 +243,6 @@ async def answer_question(
     stats = CallStats()
     first_chunk_ms = None
     usage_measured = True
-    observations = []
     model_total_ms = 0.0
     provider_first_chunk_ms = None
     model_chunk_count = 0
@@ -253,6 +271,7 @@ async def answer_question(
                 verifier_mode=mode,
                 retrieval_setting=index.setting.name,
                 passages=0,
+                answer_kind="full",
             )
         draft = await call_with_retry(
             model,
@@ -272,7 +291,6 @@ async def answer_question(
             else None
         )
         usage_measured &= draft.usage_measured
-        observations.append(draft.headers)
         model_total_ms += draft.total_ms
         provider_first_chunk_ms = draft.first_chunk_ms
         model_chunk_count += draft.chunk_count
@@ -289,7 +307,6 @@ async def answer_question(
             tokens_in += verdict.tokens_in
             tokens_out += verdict.tokens_out
             usage_measured &= verdict.usage_measured
-            observations.append(verdict.headers)
             model_total_ms += verdict.total_ms
             model_chunk_count += verdict.chunk_count
             valid = verdict.text.strip().upper().startswith("PASS")
@@ -314,7 +331,6 @@ async def answer_question(
         error_text = str(error)
         status = "rate_limited" if error.status == 429 else "error"
         usage_measured = False
-        observations.append(error.headers)
         if is_daily_limit(error):
             answer = DAILY_REPLY
         elif error.status == 429:
@@ -354,8 +370,10 @@ async def answer_question(
         retrieval_setting=index.setting.name,
         passages=len(passages),
         error=error_text,
-        provider_headers_json=json.dumps(observations),
+        provider_headers_json=json.dumps(stats.headers),
         model_total_ms=model_total_ms,
         provider_first_chunk_ms=provider_first_chunk_ms,
         model_chunk_count=model_chunk_count,
+        answer_kind="full" if status == "ok" else "none",
+        http_attempts=stats.http_attempts,
     )

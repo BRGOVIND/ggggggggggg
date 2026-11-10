@@ -25,8 +25,12 @@ def estimate_input_tokens(prompt: str) -> int:
 
 
 class Budget:
-    def __init__(self, limits: Limits):
+    def __init__(self, limits: Limits, time_scale: float = 1.0):
+        if time_scale <= 0:
+            raise ValueError("Time scale must be positive")
         self.limits = limits
+        self.minute_window_s = WINDOW_S / time_scale
+        self.min_wait_s = MIN_WAIT_S / time_scale
         self.lock = asyncio.Lock()
         self.requests = deque()
         self.tokens = deque()
@@ -43,11 +47,11 @@ class Budget:
             self.day_tokens = 0
             self.day_exhausted = False
             self.day_reset_at = now + DAY_S
-        while self.requests and now - self.requests[0] >= WINDOW_S:
+        while self.requests and now - self.requests[0] >= self.minute_window_s:
             self.requests.popleft()
-        while self.tokens and now - self.tokens[0][0] >= WINDOW_S:
+        while self.tokens and now - self.tokens[0][0] >= self.minute_window_s:
             self.tokens.popleft()
-        while self.input_tokens and now - self.input_tokens[0][0] >= WINDOW_S:
+        while self.input_tokens and now - self.input_tokens[0][0] >= self.minute_window_s:
             self.input_tokens.popleft()
 
     def _minute_tokens(self) -> int:
@@ -105,12 +109,12 @@ class Budget:
                     return True
                 delays = [self.cooldown_until - now]
                 if not request_room:
-                    delays.append(self.requests[0] + WINDOW_S - now)
+                    delays.append(self.requests[0] + self.minute_window_s - now)
                 if not token_room:
-                    delays.append(self.tokens[0][0] + WINDOW_S - now)
+                    delays.append(self.tokens[0][0] + self.minute_window_s - now)
                 if not input_room:
-                    delays.append(self.input_tokens[0][0] + WINDOW_S - now)
-            await asyncio.sleep(max(MIN_WAIT_S, max(delays)))
+                    delays.append(self.input_tokens[0][0] + self.minute_window_s - now)
+            await asyncio.sleep(max(self.min_wait_s, max(delays)))
 
     async def reserve(
         self, tokens: int, deadline: float, input_tokens: int | None = None
@@ -152,15 +156,15 @@ class Budget:
                     return None
                 delays = [self.cooldown_until - now]
                 if not request_room:
-                    delays.append(self.requests[0] + WINDOW_S - now)
+                    delays.append(self.requests[0] + self.minute_window_s - now)
                 if not token_room:
-                    delays.append(self.tokens[0][0] + WINDOW_S - now)
+                    delays.append(self.tokens[0][0] + self.minute_window_s - now)
                 if not input_room:
-                    delays.append(self.input_tokens[0][0] + WINDOW_S - now)
+                    delays.append(self.input_tokens[0][0] + self.minute_window_s - now)
             remaining = deadline - time.perf_counter()
             if remaining <= 0:
                 return "queue_deadline"
-            delay = max(MIN_WAIT_S, max(delays))
+            delay = max(self.min_wait_s, max(delays))
             await asyncio.sleep(min(delay, remaining))
 
     async def provider_limit(self, retry_after_s: float | None, daily: bool) -> None:

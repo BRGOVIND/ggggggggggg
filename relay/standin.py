@@ -36,7 +36,9 @@ class StandInState:
         self.lock = asyncio.Lock()
         self.seed = int(os.getenv("STANDIN_SEED", str(DEFAULT_SEED)))
         self.random = random.Random(self.seed)
-        self.jitter_random = random.Random(self.seed + 1)
+        self.latency_random = random.Random(self.seed + 1)
+        self.time_scale = 1.0
+        self.minute_window_s = WINDOW_S
         self.rpm = int(os.getenv("STANDIN_RPM", "30"))
         self.rpm_burst_fraction = float(
             os.getenv("STANDIN_RPM_BURST_FRACTION", str(RPM_BURST_FRACTION))
@@ -46,7 +48,7 @@ class StandInState:
         self.rpd = int(os.getenv("STANDIN_RPD", "1000"))
         self.tpd = int(os.getenv("STANDIN_TPD", "200000"))
         self.base_ms = float(os.getenv("STANDIN_BASE_MS", "650"))
-        self.jitter_ms = float(os.getenv("STANDIN_JITTER_MS", "300"))
+        self.latency_spread_ms = float(os.getenv("STANDIN_LATENCY_SPREAD_MS", "300"))
         self.chunk_ms = float(os.getenv("STANDIN_CHUNK_MS", "35"))
         self.slow_per_active_ms = float(os.getenv("STANDIN_SLOW_PER_ACTIVE_MS", "220"))
         self.fail_probability = float(os.getenv("STANDIN_FAIL_PROBABILITY", "0"))
@@ -66,20 +68,20 @@ class StandInState:
         elapsed = max(0.0, now - self.last_refill_at)
         self.request_credit = min(
             self.rpm * self.rpm_burst_fraction,
-            self.request_credit + elapsed * self.rpm / WINDOW_S,
+            self.request_credit + elapsed * self.rpm / self.minute_window_s,
         )
         self.minute_tokens = max(
-            0.0, self.minute_tokens - elapsed * self.tpm / WINDOW_S
+            0.0, self.minute_tokens - elapsed * self.tpm / self.minute_window_s
         )
         self.minute_input_tokens = max(
-            0.0, self.minute_input_tokens - elapsed * self.itpm / WINDOW_S
+            0.0, self.minute_input_tokens - elapsed * self.itpm / self.minute_window_s
         )
         self.last_refill_at = now
         if now >= self.day_reset_at:
             self.day_requests = 0
             self.day_tokens = 0
             self.day_reset_at = now + DAY_S
-        while self.requests and now - self.requests[0] >= WINDOW_S:
+        while self.requests and now - self.requests[0] >= self.minute_window_s:
             self.requests.popleft()
 
     async def admit(
@@ -110,7 +112,7 @@ class StandInState:
                     DAY_S,
                 ), self.active
             if self.request_credit < 1:
-                wait = (1 - self.request_credit) * WINDOW_S / self.rpm
+                wait = (1 - self.request_credit) * self.minute_window_s / self.rpm
                 return LimitRejection(
                     "requests per minute (RPM)",
                     "requests",
@@ -123,7 +125,7 @@ class StandInState:
             if self.minute_input_tokens + tokens_in > self.itpm:
                 wait = (
                     (self.minute_input_tokens + tokens_in - self.itpm)
-                    * WINDOW_S
+                    * self.minute_window_s
                     / self.itpm
                 )
                 return LimitRejection(
@@ -137,7 +139,8 @@ class StandInState:
                 ), self.active
             if self.minute_tokens + total_tokens > self.tpm:
                 wait = (
-                    (self.minute_tokens + total_tokens - self.tpm) * WINDOW_S / self.tpm
+                    (self.minute_tokens + total_tokens - self.tpm)
+                    * self.minute_window_s / self.tpm
                 )
                 return LimitRejection(
                     "tokens per minute (TPM)",
@@ -163,9 +166,9 @@ class StandInState:
 
     async def delay_ms(self, active: int) -> float:
         async with self.lock:
-            jitter = self.jitter_random.uniform(-self.jitter_ms, self.jitter_ms)
+            offset = self.latency_random.uniform(-self.latency_spread_ms, self.latency_spread_ms)
         return max(
-            0, self.base_ms + jitter + self.slow_per_active_ms * max(0, active - 1)
+            0, self.base_ms + offset + self.slow_per_active_ms * max(0, active - 1)
         )
 
     async def should_fail(self) -> bool:
@@ -278,6 +281,12 @@ async def chat_completions(request: Request):
 async def control(request: Request):
     changes = await request.json()
     async with state.lock:
+        if "time_scale" in changes:
+            scale = float(changes["time_scale"])
+            if scale <= 0:
+                raise ValueError("Time scale must be positive")
+            state.time_scale = scale
+            state.minute_window_s = WINDOW_S / state.time_scale
         for field in (
             "rpm",
             "rpm_burst_fraction",
@@ -286,7 +295,7 @@ async def control(request: Request):
             "rpd",
             "tpd",
             "base_ms",
-            "jitter_ms",
+            "latency_spread_ms",
             "chunk_ms",
             "slow_per_active_ms",
             "fail_probability",
@@ -298,7 +307,7 @@ async def control(request: Request):
         if changes.get("reset"):
             state.seed = int(changes.get("seed", state.seed))
             state.random = random.Random(state.seed)
-            state.jitter_random = random.Random(state.seed + 1)
+            state.latency_random = random.Random(state.seed + 1)
             state.requests.clear()
             state.request_credit = state.rpm * state.rpm_burst_fraction
             state.minute_tokens = 0.0

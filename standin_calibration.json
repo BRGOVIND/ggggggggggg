@@ -1,6 +1,6 @@
 {
   "base_ms": 328.00000000861473,
-  "jitter_ms": 56.699999995180406,
+  "latency_spread_ms": 56.699999995180406,
   "chunk_ms": 1.9909090908847495,
   "slow_per_active_ms": 220,
   "rpm_burst_fraction": 0.85,

@@ -20,7 +20,8 @@ from relay.papers import PaperIndex, RetrievalSetting
 from relay.pipeline import REFUSAL, CallStats, answer_question, call_with_retry
 from relay.probe_followup import infer_timeout_count, save_call, send_call
 from relay.probe_nine import load_probe_questions, planned_tokens, probe_step
-from relay.report import table3
+from relay.report import delivered, table3, validate_rows
+from relay.retry_experiment import local_url
 from relay.run import CSV_FIELDS, Dispatcher, queue_deadline
 from relay.standin import StandInState, rate_error
 
@@ -182,6 +183,63 @@ def test_raw_log_records_timeout_without_response(tmp_path):
     assert entry["status_code"] is None
     assert entry["usage"] is None
     assert entry["headers"] == []
+
+
+def test_rate_limited_notice_never_counts_as_success():
+    assert not delivered({"status": "rate_limited", "answer_kind": "none"})
+    assert not delivered({"status": "timeout", "answer_kind": "none"})
+    assert delivered({"status": "ok", "answer_kind": "excerpt"})
+    row = dict.fromkeys(CSV_FIELDS, "")
+    row.update(
+        request_id="limited-1", source="stand-in", status="rate_limited",
+        answer_kind="none", total_ms="1", queue_ms="0", work_ms="1",
+        retry_ms="0", tokens_in="0", tokens_out="0",
+    )
+    validate_rows([row])
+    row["status"] = "ok"
+    with pytest.raises(ValueError, match="no answer"):
+        validate_rows([row])
+
+
+def test_first_429_headers_survive_later_budget_wait():
+    class OneFailure:
+        calls = 0
+
+        async def complete(self, prompt, max_tokens):
+            self.calls += 1
+            raise ModelFailure(429, 0, "minute limit", {"retry-after": "0"})
+
+    class ClosingBudget:
+        calls = 0
+
+        async def reserve(self, tokens, deadline, input_tokens=None):
+            self.calls += 1
+            return None if self.calls == 1 else "queue_deadline"
+
+        async def provider_limit(self, retry_after_s, daily):
+            pass
+
+    async def check():
+        pages = [("Paper", 1, "Attention uses scaled dot products in this passage.")]
+        index = PaperIndex(pages, RetrievalSetting("test", 30, 1, 0))
+        model = OneFailure()
+        started = time.perf_counter()
+        result = await answer_question(
+            "attention", index, model, ClosingBudget(), "deterministic",
+            started + 1, started,
+        )
+        assert model.calls == 1
+        assert result.status == "timeout"
+        assert result.http_attempts == 1
+        assert json.loads(result.provider_headers_json) == [{"retry-after": "0"}]
+
+    asyncio.run(check())
+
+
+def test_retry_experiment_is_local_only():
+    assert local_url("http://127.0.0.1:8000") == "http://127.0.0.1:8000"
+    with pytest.raises(ValueError, match="local stand-in"):
+        local_url("https://api.groq.com/openai/v1")
 
 
 def test_retry_only_once_after_429_with_retry_after():
@@ -707,7 +765,8 @@ def test_auto_mode_defers_without_model_when_tokens_tight():
         await dispatcher.start()
         answer, _, _ = await dispatcher.submit("attention scaling")
         await dispatcher.close()
-        assert answer.status == "rate_limited"
+        assert answer.status == "ok"
+        assert answer.answer_kind == "excerpt"
         assert answer.tokens_in == 0
         assert "Paper, PDF p. 1" in answer.text
 

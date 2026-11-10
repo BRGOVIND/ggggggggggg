@@ -21,6 +21,7 @@ VALID_GRADES = {
 LOAD_SCENARIOS = {  # Keep probes and retrieval comparison out of load tables.
     "steady", "burst", "overload", "minute_halved", "daily_exhausted"
 }
+ANSWER_KINDS = {"full", "excerpt", "none"}  # A notice is not an answer.
 LOAD_ORDER = {  # Keep the two tables in the same readable scenario order.
     "steady": 0, "burst": 1, "overload": 2,
     "minute_halved": 3, "daily_exhausted": 4,
@@ -40,6 +41,13 @@ def validate_rows(rows: list[dict]) -> None:
             raise ValueError(f"Invalid source: {request_id}")
         if row["status"] not in VALID_STATUSES:
             raise ValueError(f"Invalid status: {request_id}")
+        kind = row.get("answer_kind") or ("full" if row["status"] == "ok" else "none")
+        if kind not in ANSWER_KINDS:
+            raise ValueError(f"Invalid answer kind: {request_id}")
+        if row["status"] == "ok" and kind == "none":
+            raise ValueError(f"OK row has no answer: {request_id}")
+        if row["status"] != "ok" and kind != "none":
+            raise ValueError(f"Non-OK row claims an answer: {request_id}")
         if row["answer_grade"] not in VALID_GRADES:
             raise ValueError(f"Invalid answer grade: {request_id}")
         if row["status"] != "ok" and row["answer_grade"]:
@@ -71,7 +79,16 @@ def number(value: float | None, digits: int = 0) -> str:
 
 
 def values(rows: list[dict], field: str) -> list[float]:
-    return [float(row[field]) for row in rows if row[field] not in ("", None)]
+    return [
+        float(row[field]) * float(row.get("time_scale") or 1)
+        for row in rows if row[field] not in ("", None)
+    ]
+
+
+def delivered(row: dict) -> bool:
+    return row["status"] == "ok" and row.get("answer_kind", "full") in (
+        "full", "excerpt"
+    )
 
 
 def latency(rows: list[dict], field: str, fractions: tuple[float, ...]) -> str:
@@ -91,7 +108,7 @@ def count_percentage(rows: list[dict], predicate) -> str:
 
 
 def mean_tokens(rows: list[dict]) -> str:
-    answered = [row for row in rows if row["status"] == "ok"]
+    answered = [row for row in rows if delivered(row)]
     if not answered:
         return "not measured"
     total = sum(int(row["tokens_in"]) + int(row["tokens_out"]) for row in answered)
@@ -99,7 +116,7 @@ def mean_tokens(rows: list[dict]) -> str:
 
 
 def cost_per_thousand(rows: list[dict]) -> str:
-    answered = sum(row["status"] == "ok" for row in rows)
+    answered = sum(delivered(row) for row in rows)
     if not answered:
         return "not measured"
     cost = sum(float(row["cost_usd"]) for row in rows) / answered * 1000
@@ -110,9 +127,10 @@ def ordered_load_groups(groups: dict[str, list[dict]]) -> list[list[dict]]:
     return sorted(
         groups.values(),
         key=lambda group: (
+            group[0].get("run_label", ""),
             LOAD_ORDER[group[0]["scenario"]],
             float(group[0]["queue_deadline_s"]),
-            -float(group[0].get("jitter_ms") or 0),
+            -float(group[0].get("latency_spread_ms") or 0),
         ),
     )
 
@@ -123,36 +141,38 @@ def table2(rows: list[dict]) -> None:
         if row["source"] != "stand-in" or row["scenario"] not in LOAD_SCENARIOS:
             continue
         groups[row["run_id"]].append(row)
-    print("## Table 2a: latency")
+    print("## Table 2a: latency (delivered answers only; compressed runs in virtual ms)")
     print(
-        "| Scenario | Deadline s | Jitter ms | Seed | Sent | Duration s | Offered/min | First token p50/p95/p99 ms | Total p50/p95/p99 ms |"
+        "| Pass | Scenario | Deadline s | latency_spread_ms | Scale | Seed | Sent | Answered | Duration s | Offered/min | First token p50/p95/p99 ms | Total p50/p95/p99 ms |"
     )
-    print("|---|---:|---:|---:|---:|---:|---:|---|---|")
+    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---|")
     for group in ordered_load_groups(groups):
         first = group[0]
         duration = float(first["scenario_duration_s"])
         offered = len(group) / duration * 60 if duration else 0
-        jitter = float(first.get("jitter_ms") or 0)
+        spread = float(first.get("latency_spread_ms") or 0)
+        answered = [row for row in group if delivered(row)]
         print(
-            f"| {first['scenario']} | {first['queue_deadline_s']} | "
-            f"{jitter:.1f} | {first.get('seed', '')} | "
-            f"{len(group)} | {duration:.1f} | {offered:.1f} | "
-            f"{latency(group, 'first_token_ms', PERCENTILES)} | {latency(group, 'total_ms', PERCENTILES)} |"
+            f"| {first.get('run_label', '')} | {first['scenario']} | {first['queue_deadline_s']} | "
+            f"{spread:.1f} | {first.get('time_scale') or 1} | {first.get('seed', '')} | "
+            f"{len(group)} | {len(answered)} | {duration:.1f} | {offered:.1f} | "
+            f"{latency(answered, 'first_token_ms', PERCENTILES)} | {latency(answered, 'total_ms', PERCENTILES)} |"
         )
     print("\n## Table 2b: outcomes")
     print(
-        "| Scenario | Deadline s | Jitter ms | Succeeded % (count) | Rate-limited % (count) | Timeout/given-up % (count) | Retries/request | Peak queue | Tokens/answer | Cost/1,000 answers |"
+        "| Pass | Scenario | Deadline s | latency_spread_ms | Full % (count) | Excerpt % (count) | Rate-limited % (count) | Timeout/given-up % (count) | Retries/request | Peak queue | Tokens/answer | Cost/1,000 answers |"
     )
-    print("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for group in ordered_load_groups(groups):
         first = group[0]
         retries = sum(int(row["retries"]) for row in group) / len(group)
         peak = max(int(row["peak_queue"]) for row in group)
-        jitter = float(first.get("jitter_ms") or 0)
+        spread = float(first.get("latency_spread_ms") or 0)
         print(
-            f"| {first['scenario']} | {first['queue_deadline_s']} | "
-            f"{jitter:.1f} | "
-            f"{count_percentage(group, lambda row: row['status'] == 'ok')} | "
+            f"| {first.get('run_label', '')} | {first['scenario']} | {first['queue_deadline_s']} | "
+            f"{spread:.1f} | "
+            f"{count_percentage(group, lambda row: delivered(row) and row.get('answer_kind', 'full') == 'full')} | "
+            f"{count_percentage(group, lambda row: delivered(row) and row.get('answer_kind') == 'excerpt')} | "
             f"{count_percentage(group, lambda row: row['status'] == 'rate_limited')} | "
             f"{count_percentage(group, lambda row: row['status'] == 'timeout' or row['given_up'] == 'True')} | "
             f"{retries:.2f} | {peak} | {mean_tokens(group)} | {cost_per_thousand(group)} |"
