@@ -1,0 +1,168 @@
+{
+  "run_id": "725755cd0a",
+  "calls": [
+    {
+      "call": 1,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.054146154,
+        "prompt_tokens": 914,
+        "prompt_time": 0.069307635,
+        "completion_tokens": 112,
+        "completion_time": 0.212770799,
+        "total_tokens": 1026,
+        "total_time": 0.282078434
+      },
+      "header_token_delta": 1314,
+      "header_delta_basis": "limit_minus_remaining",
+      "response_gap_ms": null,
+      "max_output_tokens": 400,
+      "prompt_plus_max_tokens": 1314,
+      "unused_output_tokens": 288
+    },
+    {
+      "call": 2,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.05420856,
+        "prompt_tokens": 1238,
+        "prompt_time": 0.090525818,
+        "completion_tokens": 106,
+        "completion_time": 0.20175333,
+        "total_tokens": 1344,
+        "total_time": 0.292279148
+      },
+      "header_token_delta": 1281,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 541.4639999999999,
+      "max_output_tokens": 400,
+      "prompt_plus_max_tokens": 1638,
+      "unused_output_tokens": 294
+    },
+    {
+      "call": 3,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.048201024,
+        "prompt_tokens": 1428,
+        "prompt_time": 0.101358862,
+        "completion_tokens": 39,
+        "completion_time": 0.074301988,
+        "total_tokens": 1467,
+        "total_time": 0.17566085
+      },
+      "header_token_delta": 1286,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 412.24899999999997,
+      "max_output_tokens": 400,
+      "prompt_plus_max_tokens": 1828,
+      "unused_output_tokens": 361
+    },
+    {
+      "call": 4,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.048987061,
+        "prompt_tokens": 2953,
+        "prompt_time": 0.202973788,
+        "completion_tokens": 54,
+        "completion_time": 0.102828136,
+        "total_tokens": 3007,
+        "total_time": 0.305801924
+      },
+      "header_token_delta": -748,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 59687.044,
+      "max_output_tokens": 400,
+      "prompt_plus_max_tokens": 3353,
+      "unused_output_tokens": 346
+    },
+    {
+      "call": 5,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.049345033,
+        "prompt_tokens": 2990,
+        "prompt_time": 0.205858449,
+        "completion_tokens": 2,
+        "completion_time": 0.00400145,
+        "total_tokens": 2992,
+        "total_time": 0.209859899
+      },
+      "header_token_delta": -104,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 59883.734,
+      "max_output_tokens": 64,
+      "prompt_plus_max_tokens": 3054,
+      "unused_output_tokens": 62
+    },
+    {
+      "call": 6,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.048745795,
+        "prompt_tokens": 1431,
+        "prompt_time": 0.098107014,
+        "completion_tokens": 6,
+        "completion_time": 0.011691958,
+        "total_tokens": 1437,
+        "total_time": 0.109798972
+      },
+      "header_token_delta": 1394,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 349.833,
+      "max_output_tokens": 400,
+      "prompt_plus_max_tokens": 1831,
+      "unused_output_tokens": 394
+    },
+    {
+      "call": 7,
+      "status": "timeout",
+      "usage": null,
+      "header_token_delta": null,
+      "header_delta_basis": null,
+      "response_gap_ms": null,
+      "max_output_tokens": 64,
+      "prompt_plus_max_tokens": null,
+      "unused_output_tokens": null
+    },
+    {
+      "call": 8,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.048290554,
+        "prompt_tokens": 19,
+        "prompt_time": 0.001026076,
+        "completion_tokens": 2,
+        "completion_time": 0.004043604,
+        "total_tokens": 21,
+        "total_time": 0.00506968
+      },
+      "header_token_delta": -4396,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 89647.779,
+      "max_output_tokens": 8,
+      "prompt_plus_max_tokens": 27,
+      "unused_output_tokens": 6
+    },
+    {
+      "call": 9,
+      "status": "ok",
+      "usage": {
+        "queue_time": 0.356002217,
+        "prompt_tokens": 19,
+        "prompt_time": 0.001230562,
+        "completion_tokens": 2,
+        "completion_time": 0.004044709,
+        "total_tokens": 21,
+        "total_time": 0.005275271
+      },
+      "header_token_delta": 0,
+      "header_delta_basis": "previous_response",
+      "response_gap_ms": 306.392,
+      "max_output_tokens": 8,
+      "prompt_plus_max_tokens": 27,
+      "unused_output_tokens": 6
+    }
+  ]
+}

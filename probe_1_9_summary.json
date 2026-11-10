@@ -1,0 +1,123 @@
+{
+  "run_id": "725755cd0a",
+  "model_id": "qwen/qwen3.8-27b",
+  "calls": [
+    {
+      "call": 1,
+      "question_id": "T01",
+      "setting": "small",
+      "status": "ok",
+      "estimated_tokens": 1819,
+      "actual_tokens": 1026,
+      "tokens_in": 914,
+      "tokens_out": 112,
+      "first_chunk_ms": 437.9999999946449,
+      "total_ms": 750.0,
+      "request_id": "725755cd0a-1"
+    },
+    {
+      "call": 2,
+      "question_id": "M02",
+      "setting": "small",
+      "status": "ok",
+      "estimated_tokens": 2251,
+      "actual_tokens": 1344,
+      "tokens_in": 1238,
+      "tokens_out": 106,
+      "first_chunk_ms": 328.00000000861473,
+      "total_ms": 531.0000000026776,
+      "request_id": "725755cd0a-2"
+    },
+    {
+      "call": 3,
+      "question_id": "H02",
+      "setting": "small",
+      "status": "ok",
+      "estimated_tokens": 2415,
+      "actual_tokens": 1467,
+      "tokens_in": 1428,
+      "tokens_out": 39,
+      "first_chunk_ms": 312.0000000053551,
+      "total_ms": 406.00000000267755,
+      "request_id": "725755cd0a-3"
+    },
+    {
+      "call": 4,
+      "question_id": "T05",
+      "setting": "medium",
+      "status": "ok",
+      "estimated_tokens": 3797,
+      "actual_tokens": 3007,
+      "tokens_in": 2953,
+      "tokens_out": 54,
+      "first_chunk_ms": 467.99999999348074,
+      "total_ms": 641.0000000032596,
+      "request_id": "725755cd0a-4"
+    },
+    {
+      "call": 5,
+      "question_id": "T05",
+      "setting": "medium",
+      "status": "ok",
+      "estimated_tokens": 3525,
+      "actual_tokens": 2992,
+      "tokens_in": 2990,
+      "tokens_out": 2,
+      "first_chunk_ms": 467.99999999348074,
+      "total_ms": 483.99999999674037,
+      "request_id": "725755cd0a-5"
+    },
+    {
+      "call": 6,
+      "question_id": "U01",
+      "setting": "small",
+      "status": "ok",
+      "estimated_tokens": 2084,
+      "actual_tokens": 1437,
+      "tokens_in": 1431,
+      "tokens_out": 6,
+      "first_chunk_ms": 328.00000000861473,
+      "total_ms": 344.00000001187436,
+      "request_id": "725755cd0a-6"
+    },
+    {
+      "call": 7,
+      "question_id": "U01",
+      "setting": "small",
+      "status": "timeout",
+      "estimated_tokens": 1742,
+      "actual_tokens": null,
+      "tokens_in": null,
+      "tokens_out": null,
+      "first_chunk_ms": null,
+      "total_ms": 30171.000000002095,
+      "request_id": "725755cd0a-7"
+    },
+    {
+      "call": 8,
+      "question_id": "short",
+      "setting": "none",
+      "status": "ok",
+      "estimated_tokens": 16,
+      "actual_tokens": 21,
+      "tokens_in": 19,
+      "tokens_out": 2,
+      "first_chunk_ms": 264.9999999994179,
+      "total_ms": 312.9999999946449,
+      "request_id": "725755cd0a-8"
+    },
+    {
+      "call": 9,
+      "question_id": "short",
+      "setting": "none",
+      "status": "ok",
+      "estimated_tokens": 16,
+      "actual_tokens": 21,
+      "tokens_in": 19,
+      "tokens_out": 2,
+      "first_chunk_ms": 547.0000000059372,
+      "total_ms": 562.0000000053551,
+      "request_id": "725755cd0a-9"
+    }
+  ]
+}

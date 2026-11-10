@@ -1,0 +1,13 @@
+{
+  "real_call_p95_s": 0.6428999999930965,
+  "sample_count": 3,
+  "probe_run_id": "725755cd0a",
+  "model_id": "qwen/qwen3.8-27b",
+  "queue_deadline_s": 2.2857999999861933,
+  "deadline_basis": "assumed_2xp95_plus_1s",
+  "assumptions": [
+    "12-second human patience cap",
+    "2x measured p95 from a very small sample",
+    "1-second safety margin"
+  ]
+}

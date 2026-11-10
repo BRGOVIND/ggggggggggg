@@ -1,0 +1,4 @@
+[
+  {"id":"M05","question":"In Moshi's Inner Monologue, what prefixes the generation of semantic audio tokens at each time step?","expected":"Text tokens representing Moshi's own speech.","paper":"Moshi","pdf_page":15,"verified":false},
+  {"id":"U04","question":"How many kilowatt-hours of electricity did training the Transformer big model consume?","expected":"Not stated in the three papers; refuse to give a kWh figure.","paper":"none","pdf_page":null,"verified":false}
+]

@@ -1,0 +1,7 @@
+setting,verifier,api_calls_per_answer,mean_input_tokens_per_answer,mean_usage_tokens_per_answer,mean_reserved_tokens_per_answer,answers_per_minute_if_usage_counts,answers_per_minute_if_max_reserved,answers_per_minute_under_itpm,effective_answers_per_minute_if_max_reserved,api_calls_per_minute_if_max_reserved,evidence
+small,deterministic,1,1310,1388,1710,4.9,3.98,4.54,3.98,3.98,observed calls 1-5 plus prompt-length extrapolation
+small,model,2,2684,2764,3148,2.46,2.16,2.22,2.16,4.32,observed calls 1-5 plus prompt-length extrapolation
+medium,deterministic,1,2441,2518,2841,2.7,2.39,2.44,2.39,2.39,observed calls 1-5 plus prompt-length extrapolation
+medium,model,2,4938,5017,5402,1.36,1.26,1.21,1.21,2.41,observed calls 1-5 plus prompt-length extrapolation
+large,deterministic,1,3085,3163,3485,2.15,1.95,1.93,1.93,1.93,observed calls 1-5 plus prompt-length extrapolation; revised large setting is unmeasured
+large,model,2,6223,6303,6687,1.08,1.02,0.96,0.96,1.91,observed calls 1-5 plus prompt-length extrapolation; revised large setting is unmeasured

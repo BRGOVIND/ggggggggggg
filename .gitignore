@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+smoke.csv
+*.grading.tmp
+groq_limits.json
+groq_budget_ledger.jsonl
+groq_budget_ledger.jsonl.lock
+evaluation_raw.jsonl
+probe_*_raw.jsonl
+results_before_standin_load.csv
+steady_deadline_*.csv
+standin*.log
