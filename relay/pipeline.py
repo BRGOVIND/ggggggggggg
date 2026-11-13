@@ -181,6 +181,7 @@ async def call_with_retry(
     max_tokens: int,
     deadline: float,
     stats: CallStats,
+    call_timeout_s: float | None = None,
 ) -> ModelReply:
     for attempt in range(MAX_ATTEMPTS):
         wait_started = time.perf_counter()
@@ -200,8 +201,9 @@ async def call_with_retry(
             if remaining <= 0:
                 raise asyncio.TimeoutError
             stats.http_attempts += 1
+            timeout_s = min(remaining, call_timeout_s) if call_timeout_s else remaining
             reply = await asyncio.wait_for(
-                model.complete(prompt, max_tokens), timeout=remaining
+                model.complete(prompt, max_tokens), timeout=timeout_s
             )
             stats.headers.append(reply.headers)
             return reply
@@ -235,6 +237,7 @@ async def answer_question(
     verifier_mode: str,
     deadline: float,
     submitted_at: float,
+    call_timeout_s: float | None = None,
 ) -> Answer:
     started = time.perf_counter()
     queue_ms = (started - submitted_at) * 1000
@@ -280,6 +283,7 @@ async def answer_question(
             DRAFT_MAX_TOKENS,
             deadline,
             stats,
+            call_timeout_s,
         )
         tokens_in += draft.tokens_in
         tokens_out += draft.tokens_out
@@ -303,6 +307,7 @@ async def answer_question(
                 VERIFY_MAX_TOKENS,
                 deadline,
                 stats,
+                call_timeout_s,
             )
             tokens_in += verdict.tokens_in
             tokens_out += verdict.tokens_out
