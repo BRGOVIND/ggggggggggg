@@ -34,7 +34,9 @@ DEADLINE_S = 20.0  # Compare retries under the long experimental deadline.
 SERVER_RPM = 10  # Deliberately below the client's assumed 30 RPM.
 CLIENT_ASSUMED_RPM = 30  # The naive client does not enforce this limit.
 JITTER_MAX_S = 2.0  # Spread retries after the provider's retry-after.
-RETRY_EFFECT_TOLERANCE_MS = 20.0  # Ignore small host-scheduling shifts in paired latency.
+RETRY_EFFECT_TOLERANCE_MS = (
+    20.0  # Ignore small host-scheduling shifts in paired latency.
+)
 PROMPT = "Answer from the supplied passage: attention uses scaled dot products [P1]."  # Keep TPM out of this RPM experiment.
 
 
@@ -71,8 +73,14 @@ def local_url(url: str) -> str:
 
 
 def result_answer(
-    text: str, status: str, elapsed_ms: float, retry_ms: float,
-    attempts: int, headers: list[dict], tokens_in: int, tokens_out: int,
+    text: str,
+    status: str,
+    elapsed_ms: float,
+    retry_ms: float,
+    attempts: int,
+    headers: list[dict],
+    tokens_in: int,
+    tokens_out: int,
 ) -> Answer:
     return Answer(
         text=text,
@@ -98,8 +106,12 @@ def result_answer(
 
 
 async def send_one(
-    number: int, run_id: str, model: ModelClient, pool: RetryPool,
-    jitter: bool, seed: int,
+    number: int,
+    run_id: str,
+    model: ModelClient,
+    pool: RetryPool,
+    jitter: bool,
+    seed: int,
 ) -> RequestResult:
     arrived = time.perf_counter()
     at_utc = datetime.now(timezone.utc).isoformat()
@@ -148,7 +160,9 @@ async def send_one(
         except ModelFailure as error:
             attempt_finished = time.perf_counter()
             if attempt == 0:
-                first_attempt_status = "rate_limited" if error.status == 429 else "error"
+                first_attempt_status = (
+                    "rate_limited" if error.status == 429 else "error"
+                )
                 first_finished = attempt_finished
             else:
                 retry_finished = attempt_finished
@@ -159,7 +173,9 @@ async def send_one(
                 break
             if attempt or error.retry_after_s is None:
                 break
-            spread = random.Random(seed + number).uniform(0, JITTER_MAX_S) if jitter else 0
+            spread = (
+                random.Random(seed + number).uniform(0, JITTER_MAX_S) if jitter else 0
+            )
             delay = error.retry_after_s + spread
             if time.perf_counter() + delay >= deadline or not pool.take():
                 break
@@ -192,46 +208,78 @@ async def send_one(
         text, status, elapsed_ms, retry_ms, attempts, headers, tokens_in, tokens_out
     )
     return RequestResult(
-        answer, at_utc, completed_at, first_attempt_status,
-        first_started, first_finished, retry_started, retry_finished,
+        answer,
+        at_utc,
+        completed_at,
+        first_attempt_status,
+        first_started,
+        first_finished,
+        retry_started,
+        retry_finished,
     )
 
 
 async def configure_server(url: str, seed: int) -> None:
-    await set_standin_options(url, {
-        "reset": True,
-        "seed": seed,
-        "time_scale": 1,
-        "rpm": SERVER_RPM,
-        "tpm": 8000,
-        "itpm": 7000,
-        "rpd": 1000,
-        "tpd": 200000,
-        "base_ms": 328,
-        "latency_spread_ms": 0,
-        "chunk_ms": 2,
-        "slow_per_active_ms": 0,
-        "hang_probability": 0,
-        "fail_probability": 0,
-    })
+    await set_standin_options(
+        url,
+        {
+            "reset": True,
+            "seed": seed,
+            "time_scale": 1,
+            "rpm": SERVER_RPM,
+            "tpm": 8000,
+            "itpm": 7000,
+            "rpd": 1000,
+            "tpd": 200000,
+            "base_ms": 328,
+            "latency_spread_ms": 0,
+            "chunk_ms": 2,
+            "slow_per_active_ms": 0,
+            "hang_probability": 0,
+            "fail_probability": 0,
+        },
+    )
 
 
 def make_rows(
-    outcomes: list[RequestResult], arm: str, run_id: str,
-    pattern: str, spacing_s: float, seed: int,
+    outcomes: list[RequestResult],
+    arm: str,
+    run_id: str,
+    pattern: str,
+    spacing_s: float,
+    seed: int,
 ) -> list[dict]:
     row_args = SimpleNamespace(
-        source="stand-in", model="stand-in", rpm=SERVER_RPM, tpm=8000,
-        rpd=1000, tpd=200000, itpm=7000, seed=seed,
-        latency_spread_ms=0, run_label="pass3", time_scale=1,
-        retry_arm=arm, arrival_pattern=pattern, limits_basis="assumed",
-        evaluation_group=f"{pattern}_seed{seed}", workers=REQUESTS,
+        source="stand-in",
+        model="stand-in",
+        rpm=SERVER_RPM,
+        tpm=8000,
+        rpd=1000,
+        tpd=200000,
+        itpm=7000,
+        seed=seed,
+        latency_spread_ms=0,
+        run_label="pass3",
+        time_scale=1,
+        retry_arm=arm,
+        arrival_pattern=pattern,
+        limits_basis="assumed",
+        evaluation_group=f"{pattern}_seed{seed}",
+        workers=REQUESTS,
     )
     rows = []
     for number, outcome in enumerate(outcomes):
         row = result_row(
-            outcome.answer, row_args, "naive_retry", run_id, number, PROMPT,
-            outcome.at_utc, 0, REQUESTS * spacing_s, DEADLINE_S,
+            outcome.answer,
+            row_args,
+            "naive_retry",
+            run_id,
+            number,
+            PROMPT,
+            outcome.at_utc,
+            0,
+            REQUESTS * spacing_s,
+            DEADLINE_S,
             "experimental_fixed",
         )
         row["first_attempt_status"] = outcome.first_attempt_status
@@ -253,13 +301,15 @@ def censored_percentile(results: list[RequestResult], fraction: float) -> float 
 
 def first_success_cohort(baseline: list[RequestResult]) -> list[int]:
     return [
-        number for number, result in enumerate(baseline)
+        number
+        for number, result in enumerate(baseline)
         if result.first_attempt_status == "ok"
     ]
 
 
 def affected_first_successes(
-    results: list[RequestResult], baseline: list[RequestResult],
+    results: list[RequestResult],
+    baseline: list[RequestResult],
 ) -> tuple[list[int], list[int]]:
     displaced = []
     slower = []
@@ -270,7 +320,8 @@ def affected_first_successes(
         prior_retry = any(
             other.retry_started_at is not None
             and other.retry_started_at <= current.first_attempt_started_at
-            for other in results if other is not current
+            for other in results
+            if other is not current
         )
         if current.first_attempt_status != "ok" and prior_retry:
             displaced.append(number)
@@ -281,7 +332,8 @@ def affected_first_successes(
             and current.first_attempt_finished_at is not None
             and other.retry_started_at <= current.first_attempt_finished_at
             and other.retry_finished_at >= current.first_attempt_started_at
-            for other in results if other is not current
+            for other in results
+            if other is not current
         )
         if (
             current.first_attempt_status == "ok"
@@ -294,8 +346,10 @@ def affected_first_successes(
 
 
 def retry_made_worse(
-    delivered_count: int, baseline_count: int,
-    cohort_p95: float | None, baseline_p95: float | None,
+    delivered_count: int,
+    baseline_count: int,
+    cohort_p95: float | None,
+    baseline_p95: float | None,
 ) -> bool:
     if delivered_count < baseline_count:
         return True
@@ -305,15 +359,22 @@ def retry_made_worse(
 
 
 def summarize_arm(
-    rows: list[dict], outcomes: list[RequestResult],
-    baseline: list[RequestResult], arm: str, run_id: str,
-    pattern: str, spacing_s: float, seed: int, arm_started: float,
+    rows: list[dict],
+    outcomes: list[RequestResult],
+    baseline: list[RequestResult],
+    arm: str,
+    run_id: str,
+    pattern: str,
+    spacing_s: float,
+    seed: int,
+    arm_started: float,
 ) -> dict:
     answered = [result for result in outcomes if delivered(result)]
     attempts = sum(row["http_attempts"] for row in rows)
     first_ms = (
         (min(result.completed_at for result in answered) - arm_started) * 1000
-        if answered else None
+        if answered
+        else None
     )
     cohort = first_success_cohort(baseline)
     cohort_p95 = censored_percentile([outcomes[number] for number in cohort], 0.95)
@@ -330,8 +391,9 @@ def summarize_arm(
         "arrivals": len(rows),
         "delivered": len(answered),
         "http_attempts": attempts,
-        "extra_http_calls_per_delivered_answer":
-            (attempts - len(rows)) / len(answered) if answered else None,
+        "extra_http_calls_per_delivered_answer": (attempts - len(rows)) / len(answered)
+        if answered
+        else None,
         "time_to_first_delivered_answer_ms": first_ms,
         "p50_delivery_ms_all_40": censored_percentile(outcomes, 0.5),
         "p95_delivery_ms_all_40": censored_percentile(outcomes, 0.95),
@@ -339,8 +401,10 @@ def summarize_arm(
         "p95_baseline_first_success_cohort_ms": cohort_p95,
         "zero_retry_cohort_p95_ms": baseline_p95,
         "retry_made_it_worse": retry_made_worse(
-            len(answered), sum(delivered(result) for result in baseline),
-            cohort_p95, baseline_p95,
+            len(answered),
+            sum(delivered(result) for result in baseline),
+            cohort_p95,
+            baseline_p95,
         ),
         "delayed_requests": len(waited),
         "delayed_delivered": sum(delivered(result) for result in waited),
@@ -358,8 +422,13 @@ def summarize_arm(
 
 
 async def run_arm(
-    args: argparse.Namespace, arm: str, jitter: bool, retry_limit: int | None,
-    pattern: str, spacing_s: float, seed: int,
+    args: argparse.Namespace,
+    arm: str,
+    jitter: bool,
+    retry_limit: int | None,
+    pattern: str,
+    spacing_s: float,
+    seed: int,
     baseline: list[RequestResult] | None,
 ) -> tuple[dict, list[RequestResult]]:
     await configure_server(args.url, seed)
@@ -370,9 +439,9 @@ async def run_arm(
     tasks = []
     try:
         for number in range(REQUESTS):
-            tasks.append(asyncio.create_task(
-                send_one(number, run_id, model, pool, jitter, seed)
-            ))
+            tasks.append(
+                asyncio.create_task(send_one(number, run_id, model, pool, jitter, seed))
+            )
             if number + 1 < REQUESTS:
                 next_at = arm_started + (number + 1) * spacing_s
                 await asyncio.sleep(max(0, next_at - time.perf_counter()))
@@ -382,8 +451,15 @@ async def run_arm(
     rows = make_rows(outcomes, arm, run_id, pattern, spacing_s, seed)
     append_rows(args.output, rows)
     summary = summarize_arm(
-        rows, outcomes, baseline or outcomes, arm, run_id,
-        pattern, spacing_s, seed, arm_started,
+        rows,
+        outcomes,
+        baseline or outcomes,
+        arm,
+        run_id,
+        pattern,
+        spacing_s,
+        seed,
+        arm_started,
     )
     return summary, outcomes
 
@@ -397,18 +473,22 @@ def save_summary(args: argparse.Namespace, arms: list[dict]) -> None:
             if record["call_id"].split("-")[0] not in run_ids:
                 continue
             if record["body_429"]:
-                bodies.append({
-                    "call_id": record["call_id"],
-                    "body": record["body_429"],
-                    "headers": record["headers"],
-                })
+                bodies.append(
+                    {
+                        "call_id": record["call_id"],
+                        "body": record["body_429"],
+                        "headers": record["headers"],
+                    }
+                )
     summary = {"arms": arms, "responses_429": bodies}
     args.summary.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Saved {len(bodies)} full 429 bodies to {args.summary}")
 
 
 def print_table(arms: list[dict]) -> None:
-    print("| Pattern | Seed | Arm | Delivered | Calls | Extra calls/delivery | First delivery ms | p50/p95 all 40 ms | Baseline cohort p95 ms | Delayed (delivered/failed) | First successes displaced/slower | Worse? |")
+    print(
+        "| Pattern | Seed | Arm | Delivered | Calls | Extra calls/delivery | First delivery ms | p50/p95 all 40 ms | Baseline cohort p95 ms | Delayed (delivered/failed) | First successes displaced/slower | Worse? |"
+    )
     print("|---|---:|---|---:|---:|---:|---:|---|---:|---|---|---|")
     for arm in arms:
         p50 = arm["p50_delivery_ms_all_40"]
@@ -440,13 +520,22 @@ async def main(args: argparse.Namespace) -> None:
             baseline = None
             for arm, jitter, retry_limit in ARMS:
                 summary, outcomes = await run_arm(
-                    args, arm, jitter, retry_limit, pattern, spacing_s,
-                    seed, baseline,
+                    args,
+                    arm,
+                    jitter,
+                    retry_limit,
+                    pattern,
+                    spacing_s,
+                    seed,
+                    baseline,
                 )
                 if baseline is None:
                     baseline = outcomes
                 arms.append(summary)
-                print(f"{pattern} seed {seed}: {arm} {summary['delivered']}/{REQUESTS}", flush=True)
+                print(
+                    f"{pattern} seed {seed}: {arm} {summary['delivered']}/{REQUESTS}",
+                    flush=True,
+                )
     save_summary(args, arms)
     print_table(arms)
 
@@ -455,6 +544,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:8000")
     parser.add_argument("--output", type=Path, default=Path("results.csv"))
-    parser.add_argument("--attempt-log", type=Path, default=Path("retry_experiment_v2_raw.jsonl"))
-    parser.add_argument("--summary", type=Path, default=Path("retry_experiment_v2_summary.json"))
+    parser.add_argument(
+        "--attempt-log", type=Path, default=Path("retry_experiment_v2_raw.jsonl")
+    )
+    parser.add_argument(
+        "--summary", type=Path, default=Path("retry_experiment_v2_summary.json")
+    )
     asyncio.run(main(parser.parse_args()))
