@@ -7,9 +7,7 @@ from datetime import datetime, timezone
 
 from relay.budget_guard import DEFAULT_CONFIG, IST, read_config
 
-DEFAULT_MODEL = (
-    "qwen/qwen3.8-27b"  # Use the selected model unless its Limits page differs.
-)
+DEFAULT_MODEL = "qwen/qwen3.8-27b"  # Use the chosen model unless its limits differ.
 
 
 def read_positive(name: str) -> int:
