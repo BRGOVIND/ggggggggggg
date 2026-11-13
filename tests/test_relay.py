@@ -10,13 +10,18 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from analyze import grade_cell
 from relay.budget_guard import IST, DailyBudgetGuard, DailyCapExceeded, read_config
 from relay.calibrate import calibration, real_attempt_rows, real_probe_rows
-from relay.evaluate import choose_question_ids, select_questions
+from relay.evaluate import (
+    choose_question_ids,
+    minute_room_for_question,
+    select_questions,
+)
 from relay.grade import apply_grades
 from relay.limits import Budget, Limits
 from relay.model import ModelClient, ModelFailure, ModelReply
-from relay.papers import PaperIndex, RetrievalSetting
+from relay.papers import PaperIndex, Passage, RetrievalSetting
 from relay.pipeline import REFUSAL, CallStats, answer_question, call_with_retry
 from relay.probe_followup import infer_timeout_count, save_call, send_call
 from relay.probe_nine import load_probe_questions, planned_tokens, probe_step
@@ -27,7 +32,7 @@ from relay.retry_experiment import (
     local_url,
     retry_made_worse,
 )
-from relay.run import CSV_FIELDS, Dispatcher, queue_deadline
+from relay.run import CSV_FIELDS, Dispatcher, planned_batch_tokens, queue_deadline
 from relay.standin import StandInState, rate_error
 
 
@@ -44,6 +49,207 @@ def budget_config(calls: int, tokens: int) -> dict:
         "calls_used_today": calls,
         "tokens_used_today": tokens,
     }
+
+
+def test_real_steady_dry_run_needs_no_key_or_http(tmp_path, monkeypatch, capsys):
+    from relay import run
+
+    class FakeIndex:
+        def search(self, question):
+            return [Passage("Paper", 1, "Short supporting passage.")]
+
+    index = FakeIndex()
+    monkeypatch.setattr(run, "build_indexes", lambda folder: {"small": index})
+    monkeypatch.setattr(
+        run, "ModelClient", lambda *args, **kwargs: pytest.fail("HTTP client created")
+    )
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    args = SimpleNamespace(
+        source="real",
+        scenario="steady",
+        count=10,
+        spacing_s=40,
+        setting="small",
+        verifier="deterministic",
+        deadline_s=20,
+        time_scale=1,
+        calibration=tmp_path / "calibration.json",
+        budget_config=tmp_path / "missing.json",
+        budget_ledger=tmp_path / "ledger.jsonl",
+        model=None,
+        dry_run=True,
+    )
+    asyncio.run(run.main(args))
+    output = capsys.readouterr().out
+    assert "10 arrivals, 40s apart" in output
+    assert "Estimated model calls: 10" in output
+    assert "Guard check: blocked" in output
+    assert not args.budget_ledger.exists()
+    assert len(planned_batch_tokens(["steady"], index, "deterministic", 10)) == 10
+
+
+def test_quality_pacing_counts_both_model_calls():
+    passages = [Passage("Paper", 1, "A short supporting passage.")]
+    draft_tokens, draft_input = minute_room_for_question(
+        "What happened?", passages, "deterministic"
+    )
+    model_tokens, model_input = minute_room_for_question(
+        "What happened?", passages, "model"
+    )
+    assert model_tokens > draft_tokens
+    assert model_input > draft_input
+
+
+def test_hidden_prompt_can_launch_holdout(tmp_path, monkeypatch):
+    from relay import interactive_evaluate
+
+    class FakeGuard:
+        def __init__(self):
+            self.config = {
+                "model_id": "test-model",
+                "calls_used_today": 0,
+                "tokens_used_today": 0,
+            }
+
+        def used_today(self):
+            return 0, 0
+
+    commands = []
+
+    def fake_run(command, env, check):
+        assert env["GROQ_API_KEY"] == "test-key"
+        commands.append(command)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(
+        interactive_evaluate, "open_real_guard", lambda *args: FakeGuard()
+    )
+    monkeypatch.setattr(
+        interactive_evaluate.getpass, "getpass", lambda prompt: "test-key"
+    )
+    monkeypatch.setattr(interactive_evaluate.subprocess, "run", fake_run)
+    questions = tmp_path / "holdout.json"
+    result = interactive_evaluate.main(
+        "small", "deterministic", None, questions=questions, count=10
+    )
+    assert result == 0
+    assert commands[0][commands[0].index("--questions") + 1] == str(questions)
+    assert commands[0][commands[0].index("--count") + 1] == "10"
+
+
+def test_per_call_timeout_does_not_retry():
+    class SlowModel:
+        calls = 0
+
+        async def complete(self, prompt, max_tokens):
+            self.calls += 1
+            await asyncio.sleep(0.05)
+
+    class FreeBudget:
+        async def reserve(self, tokens, deadline, input_tokens=None):
+            return None
+
+    async def check():
+        model = SlowModel()
+        stats = CallStats()
+        with pytest.raises(asyncio.TimeoutError):
+            await call_with_retry(
+                model,
+                FreeBudget(),
+                "prompt",
+                10,
+                time.perf_counter() + 1,
+                stats,
+                call_timeout_s=0.001,
+            )
+        assert model.calls == stats.http_attempts == 1
+        assert stats.retries == 0
+
+    asyncio.run(check())
+
+
+def test_quality_run_paces_before_total_ms(tmp_path, monkeypatch):
+    from relay import evaluate as evaluation
+
+    class FakeBudget:
+        def __init__(self, limits):
+            pass
+
+        async def wait_for_room(self, tokens, input_tokens=None):
+            await asyncio.sleep(0.05)
+            return True
+
+        async def reserve(self, tokens, deadline, input_tokens=None):
+            return None
+
+    class FakeModel:
+        calls = 0
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def complete(self, prompt, max_tokens):
+            self.calls += 1
+            answer = "PASS" if prompt.startswith("Check whether") else "Supported [P1]"
+            return ModelReply(answer, 10, 2, 1, 2, True, {}, 1)
+
+        async def close(self):
+            pass
+
+    pages = [("Paper", 1, "This is a supporting passage.")]
+    index = PaperIndex(pages, RetrievalSetting("small", 30, 1, 0))
+    monkeypatch.setattr(evaluation, "build_indexes", lambda folder: {"small": index})
+    monkeypatch.setattr(evaluation, "Budget", FakeBudget)
+    monkeypatch.setattr(evaluation, "ModelClient", FakeModel)
+    questions = tmp_path / "questions.json"
+    questions.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "Q01",
+                    "question": "What is supporting?",
+                    "verified": True,
+                    "paper": "Paper",
+                    "pdf_page": 1,
+                    "expected": "Supported",
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    args = SimpleNamespace(
+        source="stand-in",
+        allow_unverified=False,
+        questions=questions,
+        count=1,
+        question_ids=None,
+        offset=0,
+        batch_size=None,
+        setting="small",
+        verifier="model",
+        calibration=tmp_path / "missing.json",
+        quality_run=True,
+        url="http://local",
+        model="stand-in",
+        rpm=30,
+        tpm=8000,
+        rpd=1000,
+        tpd=200000,
+        itpm=7000,
+        output=tmp_path / "results.csv",
+        evaluation_group="verifier_subset_attempt2",
+        seed=7,
+        limits_basis="assumed",
+    )
+    started = time.perf_counter()
+    asyncio.run(evaluation.evaluate(args))
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    with args.output.open(newline="", encoding="utf-8") as file:
+        row = next(csv.DictReader(file))
+    assert row["status"] == "ok"
+    assert row["http_attempts"] == "2"
+    assert row["queue_deadline_s"] == "180.0"
+    assert elapsed_ms - float(row["total_ms"]) >= 40
 
 
 def test_daily_guard_refuses_batch_and_reserves_before_call(tmp_path, capsys):
@@ -196,9 +402,16 @@ def test_rate_limited_notice_never_counts_as_success():
     assert delivered({"status": "ok", "answer_kind": "excerpt"})
     row = dict.fromkeys(CSV_FIELDS, "")
     row.update(
-        request_id="limited-1", source="stand-in", status="rate_limited",
-        answer_kind="none", total_ms="1", queue_ms="0", work_ms="1",
-        retry_ms="0", tokens_in="0", tokens_out="0",
+        request_id="limited-1",
+        source="stand-in",
+        status="rate_limited",
+        answer_kind="none",
+        total_ms="1",
+        queue_ms="0",
+        work_ms="1",
+        retry_ms="0",
+        tokens_in="0",
+        tokens_out="0",
     )
     validate_rows([row])
     row["status"] = "ok"
@@ -230,8 +443,13 @@ def test_first_429_headers_survive_later_budget_wait():
         model = OneFailure()
         started = time.perf_counter()
         result = await answer_question(
-            "attention", index, model, ClosingBudget(), "deterministic",
-            started + 1, started,
+            "attention",
+            index,
+            model,
+            ClosingBudget(),
+            "deterministic",
+            started + 1,
+            started,
         )
         assert model.calls == 1
         assert result.status == "timeout"
@@ -249,15 +467,23 @@ def test_retry_experiment_is_local_only():
 
 def test_retry_delivery_percentiles_keep_all_arrivals():
     answered = [
-        SimpleNamespace(answer=SimpleNamespace(
-            status="ok", answer_kind="full", total_ms=350 + number,
-        ))
+        SimpleNamespace(
+            answer=SimpleNamespace(
+                status="ok",
+                answer_kind="full",
+                total_ms=350 + number,
+            )
+        )
         for number in range(10)
     ]
     missing = [
-        SimpleNamespace(answer=SimpleNamespace(
-            status="rate_limited", answer_kind="none", total_ms=20_000,
-        ))
+        SimpleNamespace(
+            answer=SimpleNamespace(
+                status="rate_limited",
+                answer_kind="none",
+                total_ms=20_000,
+            )
+        )
         for _ in range(30)
     ]
     assert censored_percentile(answered + missing, 0.5) is None
@@ -269,7 +495,9 @@ def test_retry_delivery_percentiles_keep_all_arrivals():
 
 
 def test_retry_affected_first_successes_counts_displaced_and_slower():
-    def entry(status, first_status, total, started, finished, retry_start=None, retry_end=None):
+    def entry(
+        status, first_status, total, started, finished, retry_start=None, retry_end=None
+    ):
         return SimpleNamespace(
             answer=SimpleNamespace(status=status, total_ms=total),
             first_attempt_status=first_status,
@@ -312,9 +540,7 @@ def test_retry_only_once_after_429_with_retry_after():
             reply = None
         return model.calls, stats.retries, reply
 
-    calls, retries, reply = asyncio.run(
-        check(ModelFailure(429, 0, "minute limit", {}))
-    )
+    calls, retries, reply = asyncio.run(check(ModelFailure(429, 0, "minute limit", {})))
     assert (calls, retries, reply.text) == (2, 1, "OK")
     for failure in (
         ModelFailure(429, None, "minute limit", {}),
@@ -551,7 +777,9 @@ def test_input_token_limit_blocks_second_large_prompt():
     async def check():
         budget = Budget(Limits(30, 100000, 1000, 200000, 7000))
         first = await budget.reserve(5000, time.perf_counter() + 1, input_tokens=5000)
-        second = await budget.reserve(5000, time.perf_counter() + 0.01, input_tokens=5000)
+        second = await budget.reserve(
+            5000, time.perf_counter() + 0.01, input_tokens=5000
+        )
         assert first is None
         assert second == "queue_deadline"
 
@@ -563,7 +791,8 @@ def test_daily_budget_stops_new_calls():
         budget = Budget(Limits(10, 100, 1, 1000))
         assert await budget.reserve(20, time.perf_counter() + 1) is None
         assert (
-            await budget.reserve(20, time.perf_counter() + 1) == "daily_budget_exhausted"
+            await budget.reserve(20, time.perf_counter() + 1)
+            == "daily_budget_exhausted"
         )
         budget.day_reset_at = time.perf_counter() - 1
         assert await budget.reserve(20, time.perf_counter() + 1) is None
@@ -713,23 +942,45 @@ def test_nonanswers_keep_blank_grade(tmp_path):
             "request_id": "ok-1",
             "status": "ok",
             "source": "real",
+            "answer_kind": "full",
         },
         {
             **dict.fromkeys(CSV_FIELDS, ""),
             "request_id": "timeout-1",
             "status": "timeout",
         },
+        {
+            **dict.fromkeys(CSV_FIELDS, ""),
+            "request_id": "excerpt-1",
+            "status": "ok",
+            "source": "real",
+            "answer_kind": "excerpt",
+        },
     ]
     with results.open("w", newline="", encoding="utf-8") as file:
         writer = csv.DictWriter(file, fieldnames=CSV_FIELDS)
         writer.writeheader()
         writer.writerows(rows)
-    grades.write_text("request_id,answer_grade\nok-1,correct\n", encoding="utf-8")
+    grades.write_text(
+        "request_id,answer_grade\nok-1,correct\ntimeout-1,\nexcerpt-1,\n",
+        encoding="utf-8",
+    )
     assert apply_grades(results, grades) == 1
     with results.open(newline="", encoding="utf-8") as file:
         graded = list(csv.DictReader(file))
     assert graded[0]["answer_grade"] == "correct"
     assert graded[1]["answer_grade"] == ""
+    assert graded[2]["answer_grade"] == ""
+
+
+def test_partial_grading_does_not_look_complete():
+    rows = [
+        {"status": "ok", "answer_kind": "full", "answer_grade": "correct"},
+        {"status": "ok", "answer_kind": "full", "answer_grade": ""},
+    ]
+    assert grade_cell(rows, {"correct"}) == "not measured (1/2 answered graded)"
+    rows[1]["answer_grade"] = "wrong"
+    assert grade_cell(rows, {"correct"}) == "50.0% (1/2)"
 
 
 def test_retrieval_table_counts_ungraded_timeout(capsys):
@@ -762,11 +1013,15 @@ def test_retrieval_table_counts_ungraded_timeout(capsys):
             "status": "timeout",
             "answer_grade": "",
             "answer": "Please retry.",
+            "first_token_ms": "",
+            "total_ms": "1000",
         },
     ]
     table3(rows)
     output = capsys.readouterr().out
     assert "50.0 | 0.0 | 0.0 | 50.0" in output
+    assert "20.0 / 20.0" in output
+    assert "1000.0" not in output
     assert "not measured" not in output
 
 
