@@ -97,7 +97,9 @@ def read_config(path: Path) -> dict:
     if observed > now_utc:
         raise ValueError("observed_at_utc cannot be in the future")
     if (now_utc - observed).total_seconds() > SNAPSHOT_MAX_AGE_S:
-        raise ValueError("Usage snapshot is older than 30 minutes; refresh account usage")
+        raise ValueError(
+            "Usage snapshot is older than 30 minutes; refresh account usage"
+        )
     if observed.astimezone(IST).date().isoformat() != today:
         raise ValueError("Usage snapshot must be from today in IST")
     return config
