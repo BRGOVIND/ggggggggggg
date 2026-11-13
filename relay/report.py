@@ -19,12 +19,19 @@ VALID_GRADES = {
     "refused_wrongly",
 }  # Keep non-answers blank.
 LOAD_SCENARIOS = {  # Keep probes and retrieval comparison out of load tables.
-    "steady", "burst", "overload", "minute_halved", "daily_exhausted"
+    "steady",
+    "burst",
+    "overload",
+    "minute_halved",
+    "daily_exhausted",
 }
 ANSWER_KINDS = {"full", "excerpt", "none"}  # A notice is not an answer.
 LOAD_ORDER = {  # Keep the two tables in the same readable scenario order.
-    "steady": 0, "burst": 1, "overload": 2,
-    "minute_halved": 3, "daily_exhausted": 4,
+    "steady": 0,
+    "burst": 1,
+    "overload": 2,
+    "minute_halved": 3,
+    "daily_exhausted": 4,
 }
 
 
@@ -81,13 +88,15 @@ def number(value: float | None, digits: int = 0) -> str:
 def values(rows: list[dict], field: str) -> list[float]:
     return [
         float(row[field]) * float(row.get("time_scale") or 1)
-        for row in rows if row[field] not in ("", None)
+        for row in rows
+        if row[field] not in ("", None)
     ]
 
 
 def delivered(row: dict) -> bool:
     return row["status"] == "ok" and row.get("answer_kind", "full") in (
-        "full", "excerpt"
+        "full",
+        "excerpt",
     )
 
 
@@ -141,7 +150,9 @@ def table2(rows: list[dict]) -> None:
         if row["source"] != "stand-in" or row["scenario"] not in LOAD_SCENARIOS:
             continue
         groups[row["run_id"]].append(row)
-    print("## Table 2a: latency (delivered answers only; 5x time-compressed runs in virtual ms)")
+    print(
+        "## Table 2a: latency (delivered answers only; 5x time-compressed runs in virtual ms)"
+    )
     print(
         "| Pass | Scenario | Deadline s | latency_spread_ms | Clock | Seed | Sent | Answered | Duration s | Offered/min | First token p50/p95/p99 ms | Total p50/p95/p99 ms |"
     )
@@ -193,7 +204,8 @@ def table3(rows: list[dict]) -> None:
         "| Setting | Questions | Correct and cited % | Wrong % | Correctly refused % | No answer % | Tokens/answer | First token p50/p95 ms | Total p50/p95 ms |"
     )
     print("|---|---:|---:|---:|---:|---:|---:|---|---|")
-    model_counts = []
+    model_rows = 0
+    model_questions = set()
     for (group_name, setting, verifier, _), group in groups.items():
         question_ids = [row["question_id"] for row in group]
         if len(question_ids) != len(set(question_ids)):
@@ -227,8 +239,10 @@ def table3(rows: list[dict]) -> None:
             else "not measured"
         )
         if verifier == "model":
-            model_counts.append(len(group))
+            model_rows += len(group)
+            model_questions.update(row["question_id"] for row in group)
             correct = wrong = refused = "cost only"
+        answered = [row for row in group if delivered(row)]
         first = group[0]
         label = (
             f"{setting}: {first['piece_words']} words, {first['pieces_requested']} pieces, "
@@ -237,13 +251,14 @@ def table3(rows: list[dict]) -> None:
         print(
             f"| {label} | {len(group)} | {correct} | {wrong} | {refused} | "
             f"{percentage(group, lambda row: row['status'] != 'ok')} | "
-            f"{mean_tokens(group)} | {latency(group, 'first_token_ms', (0.5, 0.95))} | "
-            f"{latency(group, 'total_ms', (0.5, 0.95))} |"
+            f"{mean_tokens(group)} | {latency(answered, 'first_token_ms', (0.5, 0.95))} | "
+            f"{latency(answered, 'total_ms', (0.5, 0.95))} |"
         )
-    if model_counts:
+    if model_rows:
         print(
-            f"Model-verifier comparison: {sum(model_counts)} paired questions "
-            "(planned 4). Tokens and latency are cost measurements, not a quality claim."
+            f"Model-verifier comparison: {len(model_questions)} questions, "
+            f"{model_rows} saved rows across attempts. Tokens and latency are "
+            "cost measurements, not a quality claim."
         )
 
 
