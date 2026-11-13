@@ -31,16 +31,17 @@ def apply_grades(results: Path, grades: Path) -> int:
     updated = 0
     for row in rows:
         grade = decisions.get(row["request_id"])
+        if row["status"] != "ok" or row.get("answer_kind") == "excerpt":
+            if grade not in (None, ""):
+                raise ValueError(
+                    f"Non-answer must have blank answer_grade: {row['request_id']}"
+                )
+            row["answer_grade"] = ""
+            continue
         if grade is None:
-            if row["status"] != "ok":
-                row["answer_grade"] = ""
             continue
         if grade not in VALID_GRADES:
             raise ValueError(f"Invalid grade for {row['request_id']}: {grade}")
-        if row["status"] != "ok":
-            raise ValueError(
-                f"Non-answer must have blank answer_grade: {row['request_id']}"
-            )
         if row["source"] != "real":
             raise ValueError(
                 f"Only real model answers can be quality graded: {row['request_id']}"

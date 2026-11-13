@@ -18,9 +18,12 @@ from relay.model import ModelClient, count_tokens_roughly
 from relay.papers import build_indexes
 from relay.pipeline import (
     DRAFT_MAX_TOKENS,
+    MAX_DRAFT_CHARS,
+    VERIFY_MAX_TOKENS,
     answer_question,
     draft_prompt,
     planned_call_tokens,
+    verify_prompt,
 )
 from relay.run import (
     PAPER_FOLDER,
@@ -33,6 +36,8 @@ from relay.run import (
 QUESTION_FILE = Path(
     "questions_candidate.json"
 )  # Human verification precedes gold grading.
+QUALITY_CALL_TIMEOUT_S = 30.0  # Bound each provider attempt independently.
+QUALITY_TOTAL_DEADLINE_S = 180.0  # Allow paced draft, verifier, and one 429 retry.
 
 
 def load_questions(path: Path) -> list[dict]:
@@ -73,6 +78,19 @@ def choose_question_ids(questions: list[dict], ids: list[str]) -> list[dict]:
     return [by_id[question_id] for question_id in ids]
 
 
+def minute_room_for_question(
+    question: str, passages: list, verifier: str
+) -> tuple[int, int]:
+    draft = draft_prompt(question, passages)
+    tokens = count_tokens_roughly(draft) + DRAFT_MAX_TOKENS
+    input_tokens = estimate_input_tokens(draft)
+    if verifier == "model":
+        check = verify_prompt(question, "x" * MAX_DRAFT_CHARS, passages)
+        tokens += count_tokens_roughly(check) + VERIFY_MAX_TOKENS
+        input_tokens += estimate_input_tokens(check)
+    return tokens, input_tokens
+
+
 async def evaluate(args: argparse.Namespace) -> None:
     if args.source == "real" and not os.getenv("GROQ_API_KEY"):
         raise SystemExit(
@@ -90,9 +108,7 @@ async def evaluate(args: argparse.Namespace) -> None:
         args.tpd = guard.config["tpd"]
         args.itpm = guard.config.get("itpm")
         args.limits_basis = "account_console"
-    selected = select_questions(
-        load_questions(args.questions), args.count
-    )
+    selected = select_questions(load_questions(args.questions), args.count)
     if args.question_ids:
         selected = choose_question_ids(selected, args.question_ids)
     if args.offset < 0 or args.offset >= len(selected):
@@ -121,6 +137,9 @@ async def evaluate(args: argparse.Namespace) -> None:
     limits = load_limits(args)
     budget = Budget(limits)
     deadline_s, basis = queue_deadline(args.calibration)
+    if args.quality_run:
+        deadline_s = QUALITY_TOTAL_DEADLINE_S
+        basis = "quality_30s_per_call_180s_total"
     url = args.url or (
         "https://api.groq.com/openai/v1"
         if args.source == "real"
@@ -146,8 +165,13 @@ async def evaluate(args: argparse.Namespace) -> None:
                 passages = index.search(question)
                 prompt = draft_prompt(question, passages)
                 estimate = count_tokens_roughly(prompt) + DRAFT_MAX_TOKENS
+                input_estimate = estimate_input_tokens(prompt)
+                if args.quality_run:
+                    estimate, input_estimate = minute_room_for_question(
+                        question, passages, args.verifier
+                    )
                 if not await budget.wait_for_room(
-                    estimate, input_tokens=estimate_input_tokens(prompt)
+                    estimate, input_tokens=input_estimate
                 ):
                     print("Daily budget or per-call TPM exhausted; evaluation stopped.")
                     return
@@ -161,6 +185,7 @@ async def evaluate(args: argparse.Namespace) -> None:
                     args.verifier,
                     submitted_at + deadline_s,
                     submitted_at,
+                    QUALITY_CALL_TIMEOUT_S if args.quality_run else None,
                 )
                 row = result_row(
                     answer,
@@ -202,6 +227,7 @@ if __name__ == "__main__":
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--evaluation-group")
+    parser.add_argument("--quality-run", action="store_true")
     parser.add_argument("--url")
     parser.add_argument("--model")
     parser.add_argument("--rpm", type=int, default=30)
