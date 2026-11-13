@@ -12,6 +12,7 @@ from pathlib import Path
 from relay.budget_guard import (
     DEFAULT_CONFIG,
     DEFAULT_LEDGER,
+    RETRY_HEADROOM_CALLS,
     DailyCapExceeded,
     open_real_guard,
 )
@@ -153,10 +154,16 @@ def load_limits(args: argparse.Namespace) -> Limits:
     return Limits(args.rpm, args.tpm, args.rpd, args.tpd, getattr(args, "itpm", None))
 
 
-def planned_batch_tokens(scenarios: list[str], index, verifier_mode: str) -> list[int]:
+def planned_batch_tokens(
+    scenarios: list[str], index, verifier_mode: str, steady_count: int | None = None
+) -> list[int]:
     planned = []
     for scenario in scenarios:
-        count = SCENARIOS[scenario][0]
+        count = (
+            steady_count
+            if scenario == "steady" and steady_count
+            else SCENARIOS[scenario][0]
+        )
         for number in range(count):
             question = QUESTIONS[number % len(QUESTIONS)]
             planned.extend(planned_call_tokens(question, index, verifier_mode))
@@ -287,8 +294,13 @@ class Dispatcher:
 
 
 async def configure_standin(
-    url: str, scenario: str, limits: Limits, calibration_path: Path,
-    seed: int, no_latency_spread: bool, time_scale: float,
+    url: str,
+    scenario: str,
+    limits: Limits,
+    calibration_path: Path,
+    seed: int,
+    no_latency_spread: bool,
+    time_scale: float,
 ) -> float:
     if time_scale != 1 and not calibration_path.exists():
         raise ValueError("Compressed runs need stand-in calibration")
@@ -317,12 +329,18 @@ async def configure_standin(
             "hang_ms",
         ):
             changes[field] = measured[field]
-    latency_spread_ms = 0.0 if no_latency_spread else float(
-        changes.get("latency_spread_ms", DEFAULT_LATENCY_SPREAD_MS)
+    latency_spread_ms = (
+        0.0
+        if no_latency_spread
+        else float(changes.get("latency_spread_ms", DEFAULT_LATENCY_SPREAD_MS))
     )
     changes["latency_spread_ms"] = latency_spread_ms
     for field in (
-        "base_ms", "latency_spread_ms", "chunk_ms", "slow_per_active_ms", "hang_ms"
+        "base_ms",
+        "latency_spread_ms",
+        "chunk_ms",
+        "slow_per_active_ms",
+        "hang_ms",
     ):
         if field in changes:
             changes[field] /= time_scale
@@ -380,8 +398,7 @@ def result_row(
         "itpm": getattr(args, "itpm", None) or "",
         "seed": args.seed if args.source == "stand-in" else "",
         "latency_spread_ms": (
-            getattr(args, "latency_spread_ms", "")
-            if args.source == "stand-in" else ""
+            getattr(args, "latency_spread_ms", "") if args.source == "stand-in" else ""
         ),
         "run_label": getattr(args, "run_label", ""),
         "time_scale": getattr(args, "time_scale", 1.0),
@@ -417,6 +434,9 @@ async def run_scenario(
     basis: str,
 ) -> list[dict]:
     count, spacing_s, duration_s = SCENARIOS[scenario]
+    if scenario == "steady" and args.count is not None:
+        count = args.count
+        duration_s = count * spacing_s
     if args.spacing_s is not None:
         spacing_s = args.spacing_s
         duration_s = count * spacing_s
@@ -424,8 +444,13 @@ async def run_scenario(
     limits = load_limits(args)
     if args.source == "stand-in":
         args.latency_spread_ms = await configure_standin(
-            args.url, scenario, limits, args.standin_calibration,
-            args.seed, args.no_latency_spread, scale,
+            args.url,
+            scenario,
+            limits,
+            args.standin_calibration,
+            args.seed,
+            args.no_latency_spread,
+            scale,
         )
     budget = Budget(limits, time_scale=scale)
     dispatcher = Dispatcher(
@@ -467,7 +492,67 @@ async def run_scenario(
     return rows
 
 
+def show_dry_run(args: argparse.Namespace) -> None:
+    if args.spacing_s is not None and (
+        args.scenario != "steady" or args.spacing_s <= 0
+    ):
+        raise ValueError("--spacing-s requires steady and a positive interval")
+    if args.source == "real" and args.time_scale != 1:
+        raise ValueError("Time compression is stand-in only")
+    if args.time_scale <= 0:
+        raise ValueError("Time scale must be positive")
+    scenarios = (
+        ["steady", "burst", "overload", "minute_halved", "daily_exhausted"]
+        if args.scenario == "all"
+        else [args.scenario]
+    )
+    indexes = build_indexes(PAPER_FOLDER)
+    planned = planned_batch_tokens(
+        scenarios, indexes[args.setting], args.verifier, args.count
+    )
+    deadline_s, basis = queue_deadline(args.calibration)
+    if args.deadline_s is not None:
+        deadline_s = args.deadline_s
+        basis = "experimental_fixed"
+    print(
+        f"Dry run: source={args.source}, setting={args.setting}, verifier={args.verifier}"
+    )
+    print(f"Deadline: {deadline_s:.2f}s ({basis})")
+    for scenario in scenarios:
+        count, spacing_s, _ = SCENARIOS[scenario]
+        if scenario == "steady":
+            count = args.count or count
+            spacing_s = args.spacing_s or spacing_s
+        last_arrival_s = (count - 1) * spacing_s
+        print(
+            f"{scenario}: {count} arrivals, {spacing_s:g}s apart, "
+            f"first at 0s, last at {last_arrival_s:g}s"
+        )
+    retry_tokens = RETRY_HEADROOM_CALLS * max(planned, default=0)
+    print(
+        f"Estimated model calls: {len(planned)}; tokens: {sum(planned)}. "
+        f"Guard preflight: {len(planned) + RETRY_HEADROOM_CALLS} calls, "
+        f"{sum(planned) + retry_tokens} tokens including retry headroom."
+    )
+    if args.source != "real":
+        print("Guard check: not applicable to stand-in. No requests sent.")
+        return
+    try:
+        guard = open_real_guard(args.budget_config, args.budget_ledger, args.model)
+        print(f"Model for planned batch: {guard.config['model_id']}")
+        guard.check_batch(planned)
+    except (ValueError, DailyCapExceeded) as error:
+        print(f"Guard check: blocked ({error}). No requests sent.")
+        return
+    print("Guard check: passes current snapshot. No requests sent.")
+
+
 async def main(args: argparse.Namespace) -> None:
+    if args.count is not None and (args.scenario != "steady" or args.count < 1):
+        raise ValueError("--count requires steady and a positive integer")
+    if args.dry_run:
+        show_dry_run(args)
+        return
     if args.source == "real" and not os.getenv("GROQ_API_KEY"):
         raise SystemExit(
             "Set GROQ_API_KEY in your environment. Never put it in the submission."
@@ -494,13 +579,19 @@ async def main(args: argparse.Namespace) -> None:
         raise ValueError("Time scale must be positive")
     if args.source != "stand-in" and args.time_scale != 1:
         raise ValueError("Time compression is stand-in only")
-    if args.spacing_s is not None and (args.scenario != "steady" or args.spacing_s <= 0):
+    if args.spacing_s is not None and (
+        args.scenario != "steady" or args.spacing_s <= 0
+    ):
         raise ValueError("--spacing-s requires steady and a positive interval")
     indexes = build_indexes(PAPER_FOLDER)
     deadline_s, basis = queue_deadline(args.calibration)
     if args.deadline_s is not None:
         deadline_s = args.deadline_s
-        basis = "assumed_probe_derived" if abs(deadline_s - 2.29) < 0.001 else "experimental_fixed"
+        basis = (
+            "assumed_probe_derived"
+            if abs(deadline_s - 2.29) < 0.001
+            else "experimental_fixed"
+        )
     if deadline_s <= 0:
         raise ValueError("Deadline must be positive")
     if args.no_latency_spread and args.scenario != "minute_halved":
@@ -513,7 +604,9 @@ async def main(args: argparse.Namespace) -> None:
     if guard is not None:
         print(f"Model for batch: {args.model}")
         guard.check_batch(
-            planned_batch_tokens(scenarios, indexes[args.setting], args.verifier)
+            planned_batch_tokens(
+                scenarios, indexes[args.setting], args.verifier, args.count
+            )
         )
     model = ModelClient(
         args.url,
@@ -558,6 +651,8 @@ if __name__ == "__main__":
     parser.add_argument("--itpm", type=int, default=7000)
     parser.add_argument("--deadline-s", type=float)
     parser.add_argument("--spacing-s", type=float)
+    parser.add_argument("--count", type=int)
+    parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--time-scale", type=float, default=1.0)
     parser.add_argument("--run-label", default="")
     parser.add_argument("--attempt-log", type=Path, default=Path("attempts_raw.jsonl"))

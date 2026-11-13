@@ -140,7 +140,8 @@ class StandInState:
             if self.minute_tokens + total_tokens > self.tpm:
                 wait = (
                     (self.minute_tokens + total_tokens - self.tpm)
-                    * self.minute_window_s / self.tpm
+                    * self.minute_window_s
+                    / self.tpm
                 )
                 return LimitRejection(
                     "tokens per minute (TPM)",
@@ -166,7 +167,9 @@ class StandInState:
 
     async def delay_ms(self, active: int) -> float:
         async with self.lock:
-            offset = self.latency_random.uniform(-self.latency_spread_ms, self.latency_spread_ms)
+            offset = self.latency_random.uniform(
+                -self.latency_spread_ms, self.latency_spread_ms
+            )
         return max(
             0, self.base_ms + offset + self.slow_per_active_ms * max(0, active - 1)
         )
