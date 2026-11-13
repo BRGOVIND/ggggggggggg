@@ -1,0 +1,8 @@
+{
+  "source": "User-pasted Groq Console Logs excerpt, 11 Nov 2026 chat; timestamps displayed by console",
+  "rows": [
+    {"request_id_suffix": "bhe1", "time": "11/10/2026, 4:33:58 AM", "code": 429, "ttft_s": 0, "latency_s": 0.011, "input_tokens": 0, "output_tokens": 0, "error": "rate_limit_exceeded"},
+    {"request_id_suffix": "4j8j", "time": "11/10/2026, 4:32:56 AM", "code": 429, "ttft_s": 0, "latency_s": 0.001, "input_tokens": 0, "output_tokens": 0, "error": "rate_limit_exceeded"},
+    {"request_id_suffix": "bb9f", "time": "11/10/2026, 4:06:28 AM", "code": 499, "ttft_s": 0, "latency_s": 30.000, "input_tokens": 0, "output_tokens": 0, "error": "Client Disconnected"}
+  ]
+}

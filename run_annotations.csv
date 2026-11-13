@@ -1,0 +1,9 @@
+request_id,question_id,attempt_label,deadline_label,recorded_deadline_s,path_label,interpretation
+aeabe0a4b9-0,T01,verifier_subset_attempt1,2.29s,2.2857999999861933,load-style deadline inside evaluator,cost attempt; not a quality claim
+aeabe0a4b9-1,M02,verifier_subset_attempt1,2.29s,2.2857999999861933,load-style deadline inside evaluator,cost attempt; not a quality claim
+aeabe0a4b9-2,H02,verifier_subset_attempt1,2.29s,2.2857999999861933,load-style deadline inside evaluator,cost attempt; not a quality claim
+aeabe0a4b9-3,M04,verifier_subset_attempt1,2.29s,2.2857999999861933,load-style deadline inside evaluator,cost attempt; not a quality claim
+d348b33b84-0,T01,verifier_subset_attempt2,30s per call,180.0,quality-run evaluator; pre-run pacing outside total_ms,cost measurement; not a quality claim
+d348b33b84-1,M02,verifier_subset_attempt2,30s per call,180.0,quality-run evaluator; pre-run pacing outside total_ms,cost measurement; not a quality claim
+d348b33b84-2,H02,verifier_subset_attempt2,30s per call,180.0,quality-run evaluator; pre-run pacing outside total_ms,cost measurement; not a quality claim
+d348b33b84-3,M04,verifier_subset_attempt2,30s per call,180.0,quality-run evaluator; pre-run pacing outside total_ms,cost measurement; not a quality claim

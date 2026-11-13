@@ -1,0 +1,337 @@
+{
+  "H02": {
+    "small": {
+      "corpus_chunks": 270,
+      "nonzero_score_chunks": 129,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 16,
+          "first_25_words": "Chinese (F.-Edu-Chinese-V2.1) Code (Pile Github) 0.90 0.44 0.88 0.42 0.86 0.84 0.40 Bits-per-byte 0.82 0.80 0.38 0.78 Validation 0.36 0.76 0.74 20B 30B 40B 50B"
+        },
+        {
+          "rank": 2,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 11,
+          "first_25_words": "1024 , 2048 H-Net (space) Spacelike 6.0 1.6B M4 + T31 + M4 1024 , 2048 Byte 8192 H-Net (1-stage) 6-DC 4.7 1.3B M4 +"
+        },
+        {
+          "rank": 3,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 11,
+          "first_25_words": "from the FineWeb-Edu dataset (Penedo et al. 2024). All tokenizer-free models process 8192 utf-8 encoded bytes per sequence, while the Transformer uses 1792 tokens from"
+        },
+        {
+          "rank": 4,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 10,
+          "first_25_words": "decoding (Leviathan, Kalman, and Matias 2023; Chen et al. 2023), which also involves a small network (the draft model) stepping on every token, and a"
+        }
+      ],
+      "target_page_chunks": [
+        {
+          "rank": 6,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 3,
+          "first_25_words": "h e _ e n d _ o f _ t o k e n s ! *̅ ! Dechunkinĝ . (d) Upsampler 1 −'!\"$"
+        }
+      ]
+    },
+    "medium": {
+      "corpus_chunks": 196,
+      "nonzero_score_chunks": 107,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 16,
+          "first_25_words": "Chinese (F.-Edu-Chinese-V2.1) Code (Pile Github) 0.90 0.44 0.88 0.42 0.86 0.84 0.40 Bits-per-byte 0.82 0.80 0.38 0.78 Validation 0.36 0.76 0.74 20B 30B 40B 50B"
+        },
+        {
+          "rank": 2,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 10,
+          "first_25_words": "and design choices. Models. We compare against a standard tokenized Transformer following the Llama architecture (Touvron, Martin, et al. 2023; Grattafiori et al. 2024).11 We"
+        },
+        {
+          "rank": 3,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 12,
+          "first_25_words": "of methods: SpaceByte++, H-Net (space), H-Net (1-stage), and H-Net (2-stage). The same trends hold as at the Large scale. Our SpaceByte++ baseline is strong, but"
+        },
+        {
+          "rank": 4,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 22,
+          "first_25_words": "4 Discussion Related Work. Table 6 summarizes related models, particularly those motivated by byte-level language modeling. These methods are described in detail in Appendix A,"
+        }
+      ],
+      "target_page_chunks": [
+        {
+          "rank": 9,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 3,
+          "first_25_words": "h e _ e n d _ o f _ t o k e n s ! *̅ ! Dechunkinĝ . (d) Upsampler 1 −'!\"$"
+        }
+      ]
+    }
+  },
+  "H03": {
+    "small": {
+      "corpus_chunks": 270,
+      "nonzero_score_chunks": 160,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 3,
+          "first_25_words": "h e _ e n d _ o f _ t o k e n s ! *̅ ! Dechunkinĝ . (d) Upsampler 1 −'!\"$"
+        },
+        {
+          "rank": 2,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 2,
+          "first_25_words": "pipelines while substantially improving modeling ability, by replacing handcrafted heuristics with content-aware and context-dependent segmentation learned from data. Hierarchical Processing. The H-Net adopts the hierarchical"
+        },
+        {
+          "rank": 3,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 9,
+          "first_25_words": "the outer stages seem to accelerate learning the chunking mechanism. 2.4 Autoregressive Training and Inference Every component of H-Net (i.e., encoder-, decoder-, main- networks, and"
+        },
+        {
+          "rank": 4,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 6,
+          "first_25_words": "contextual or semantic shift. From this observation, we add an inductive bias by measuring the similarity between adjacent representations: when context changes, consecutive vectors should"
+        }
+      ]
+    },
+    "medium": {
+      "corpus_chunks": 196,
+      "nonzero_score_chunks": 127,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 3,
+          "first_25_words": "h e _ e n d _ o f _ t o k e n s ! *̅ ! Dechunkinĝ . (d) Upsampler 1 −'!\"$"
+        },
+        {
+          "rank": 2,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 18,
+          "first_25_words": "Bits-per-byte (2-stage) Compression Ratio L1/L0 Compression Ratio L2/L1 0.38 0.44 1.05 0.37 1.00 0.42 0.95 0.36 0.40 0.90 0.35 0.38 0.85 0.34 0.36 0.80 25B"
+        },
+        {
+          "rank": 3,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 9,
+          "first_25_words": "that neural network hyperparameters should be scaled in predictable ways for optimal trainability (Yang and Hu 2020). Concretely, outer stages, which handle significantly longer input"
+        },
+        {
+          "rank": 4,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 6,
+          "first_25_words": "high boundary probability 𝑝𝑡. Downsampler. The downsampler compresses encoder outputs ˆ𝑥𝑠into a reduced set of vectors 𝑥𝑠+1 using boundary indicators {𝑏𝑠𝑡}𝐿𝑠𝑡=1. Among potential compression strategies"
+        }
+      ]
+    }
+  },
+  "T03": {
+    "small": {
+      "corpus_chunks": 270,
+      "nonzero_score_chunks": 121,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 6,
+          "first_25_words": "Table 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations for different layer types. n is the sequence length, d is the"
+        },
+        {
+          "rank": 2,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 8,
+          "first_25_words": "Table 2: The Transformer achieves better BLEU scores than previous state-of-the-art models on the English-to-German and English-to-French newstest2014 tests at a fraction of the training"
+        },
+        {
+          "rank": 3,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 9,
+          "first_25_words": "attention key size dk hurts model quality. This suggests that determining compatibility is not easy and that a more sophisticated compatibility function than dot product"
+        },
+        {
+          "rank": 4,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 6,
+          "first_25_words": "fixed offset k, PEpos+k can be represented as a linear function of PEpos. We also experimented with using learned positional embeddings [9] instead, and found"
+        }
+      ]
+    },
+    "medium": {
+      "corpus_chunks": 196,
+      "nonzero_score_chunks": 99,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 6,
+          "first_25_words": "Table 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations for different layer types. n is the sequence length, d is the"
+        },
+        {
+          "rank": 2,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 8,
+          "first_25_words": "Table 2: The Transformer achieves better BLEU scores than previous state-of-the-art models on the English-to-German and English-to-French newstest2014 tests at a fraction of the training"
+        },
+        {
+          "rank": 3,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 9,
+          "first_25_words": "Table 3: Variations on the Transformer architecture. Unlisted values are identical to those of the base model. All metrics are on the English-to-German translation development"
+        },
+        {
+          "rank": 4,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 5,
+          "first_25_words": "max(0, xW1 + b1)W2 + b2 (2) While the linear transformations are the same across different positions, they use different parameters from layer to layer."
+        }
+      ]
+    }
+  },
+  "U01": {
+    "small": {
+      "corpus_chunks": 270,
+      "nonzero_score_chunks": 164,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Moshi",
+          "pdf_page": 36,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue 6.1 Toxicity analysis The scientific community has devoted in the last years some effort to address bias"
+        },
+        {
+          "rank": 2,
+          "paper": "Moshi",
+          "pdf_page": 37,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue Table 13: Regurgitation of training data with condition-free generation from differ- ent models. We measure how many"
+        },
+        {
+          "rank": 3,
+          "paper": "Moshi",
+          "pdf_page": 52,
+          "first_25_words": "Jingjing Liu, and Bill Dolan. Dialogpt: Large-scale generative pre-training for conversational response generation. CoRR, abs/1911.00536, 2019. 30 Yu Zhang, Wei Han, James Qin, Yongqiang Wang,"
+        },
+        {
+          "rank": 4,
+          "paper": "Moshi",
+          "pdf_page": 36,
+          "first_25_words": "The more a model has seen a sequence or a subsequence during training, the more likely it is to generate this exact sequence during the"
+        }
+      ]
+    },
+    "medium": {
+      "corpus_chunks": 196,
+      "nonzero_score_chunks": 140,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Moshi",
+          "pdf_page": 37,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue Table 13: Regurgitation of training data with condition-free generation from differ- ent models. We measure how many"
+        },
+        {
+          "rank": 2,
+          "paper": "Moshi",
+          "pdf_page": 52,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue Huang, Wei-Cheng Tseng, Ko-tik Lee, Da-Rong Liu, Zili Huang, Shuyan Dong, Shang- Wen Li, Shinji Watanabe, Abdelrahman"
+        },
+        {
+          "rank": 3,
+          "paper": "Moshi",
+          "pdf_page": 36,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue 6.1 Toxicity analysis The scientific community has devoted in the last years some effort to address bias"
+        },
+        {
+          "rank": 4,
+          "paper": "Moshi",
+          "pdf_page": 48,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue Ilya Loshchilov and Frank Hutter. Sgdr: Stochastic gradient descent with warm restarts. arXiv preprint arXiv:1608.03983, 2016. 7"
+        }
+      ]
+    }
+  },
+  "U02": {
+    "small": {
+      "corpus_chunks": 270,
+      "nonzero_score_chunks": 99,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 12,
+          "first_25_words": "Lawrence, D. D. Lee, M. Sugiyama, and R. Garnett, editors, Advances in Neural Information Processing Systems 28, pages 2440–2448. Curran Associates, Inc., 2015. [35] Ilya"
+        },
+        {
+          "rank": 2,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 12,
+          "first_25_words": "[25] Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated corpus of english: The penn treebank. Computational linguistics, 19(2):313–330, 1993. [26]"
+        },
+        {
+          "rank": 3,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 28,
+          "first_25_words": "Multitask Finetuning”. In: Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). Ed. by Anna Rogers, Jordan Boyd-Graber,"
+        },
+        {
+          "rank": 4,
+          "paper": "Moshi",
+          "pdf_page": 63,
+          "first_25_words": "5 out of 5. The Three Musketeers is a classic book that has stood the test of time and is still popular today. USER: Great,"
+        }
+      ]
+    },
+    "medium": {
+      "corpus_chunks": 196,
+      "nonzero_score_chunks": 81,
+      "top_chunks": [
+        {
+          "rank": 1,
+          "paper": "Attention Is All You Need",
+          "pdf_page": 12,
+          "first_25_words": "[25] Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated corpus of english: The penn treebank. Computational linguistics, 19(2):313–330, 1993. [26]"
+        },
+        {
+          "rank": 2,
+          "paper": "Dynamic Chunking",
+          "pdf_page": 28,
+          "first_25_words": "Multitask Finetuning”. In: Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers). Ed. by Anna Rogers, Jordan Boyd-Graber,"
+        },
+        {
+          "rank": 3,
+          "paper": "Moshi",
+          "pdf_page": 36,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue 6.1 Toxicity analysis The scientific community has devoted in the last years some effort to address bias"
+        },
+        {
+          "rank": 4,
+          "paper": "Moshi",
+          "pdf_page": 63,
+          "first_25_words": "Moshi: a speech-text foundation model for real-time dialogue USER: Hello, I wanted to talk to you about The Three Musketeers. MOSHI: Of course, happy to"
+        }
+      ]
+    }
+  },
+  "page_break": {
+    "H03_pdf_page_6": "crete nature of chunk boundaries, which impedes gradient flow during backpropagation. We introduce the smoothing module as a technique to address this problem. As illustrated in Figure 1-(c), this com",
+    "H03_pdf_page_7": "retely, the smoothing module applies an exponential moving average (EMA) with the following definition:                                                ¯𝑧𝑡= 𝑃𝑡ˆ𝑧𝑡+ (1 −𝑃𝑡)¯𝑧𝑡−1.                        "
+  },
+  "bleu_conflict": {
+    "pdf_page": 8,
+    "table_2": "ormer (big)                    28.4     41.8             2.3 · 1019    Residual Dropout  We apply dropout [33] to the output of each sub-layer, before it is added to the sub-layer input and normalized",
+    "section_6_1": " our big model achieves a BLEU score of 41.0, outperforming all of the previously published single models, at less than 1/4 the training cost of the previous state-of-the-art model. The Transformer (b"
+  }
+}
