@@ -3,11 +3,24 @@ import getpass
 import os
 import subprocess
 import sys
+from pathlib import Path
 
 from relay.budget_guard import DEFAULT_CONFIG, DEFAULT_LEDGER, open_real_guard
 
 
-def main(setting: str) -> int:
+def main(
+    setting: str,
+    verifier: str,
+    question_ids: list[str] | None,
+    quality_run: bool = False,
+    evaluation_group: str | None = None,
+    questions: Path = Path("questions_candidate.json"),
+    count: int = 15,
+) -> int:
+    if count < 1:
+        raise ValueError("Question count must be positive")
+    if verifier == "model" and not question_ids:
+        raise ValueError("Model verifier requires explicit question IDs")
     guard = open_real_guard(DEFAULT_CONFIG, DEFAULT_LEDGER)
     calls, tokens = guard.used_today()
     print(f"Model for batch: {guard.config['model_id']}")
@@ -33,12 +46,18 @@ def main(setting: str) -> int:
         "--setting",
         setting,
         "--verifier",
-        "deterministic",
+        verifier,
         "--count",
-        "15",
+        str(count),
+        "--questions",
+        str(questions),
         "--evaluation-group",
-        "final_v1",
+        evaluation_group or ("final_v1_model" if verifier == "model" else "final_v1"),
     ]
+    if quality_run:
+        command.append("--quality-run")
+    if question_ids:
+        command.extend(["--question-ids", *question_ids])
     result = subprocess.run(command, env=environment, check=False)
     environment.pop("GROQ_API_KEY", None)
     return result.returncode
@@ -46,8 +65,33 @@ def main(setting: str) -> int:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--setting", choices=["small", "medium", "large"], default="small")
+    parser.add_argument(
+        "--setting", choices=["small", "medium", "large"], default="small"
+    )
+    parser.add_argument(
+        "--verifier", choices=["deterministic", "model"], default="deterministic"
+    )
+    parser.add_argument("--question-ids", nargs="+")
+    parser.add_argument("--quality-run", action="store_true")
+    parser.add_argument("--evaluation-group")
+    parser.add_argument(
+        "--questions", type=Path, default=Path("questions_candidate.json")
+    )
+    parser.add_argument("--count", type=int, default=15)
     try:
-        raise SystemExit(main(parser.parse_args().setting))
+        args = parser.parse_args()
+        raise SystemExit(
+            main(
+                args.setting,
+                args.verifier,
+                args.question_ids,
+                args.quality_run,
+                args.evaluation_group,
+                args.questions,
+                args.count,
+            )
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
     except (EOFError, KeyboardInterrupt):
         raise SystemExit("Evaluation cancelled") from None
