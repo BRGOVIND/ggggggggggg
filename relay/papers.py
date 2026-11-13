@@ -49,9 +49,7 @@ PAPER_ALIASES = {  # Explicit names guide retrieval without excluding cross-pape
     "Moshi": ("moshi", "mimi", "helium", "inner monologue"),
     "Dynamic Chunking": ("h-net", "dynamic chunking"),
 }
-PAPER_BOOST = (
-    2.0  # Explicitly named paper should outrank incidental mentions in others.
-)
+PAPER_BOOST = 2.0  # Explicitly named paper should outrank incidental mentions.
 
 
 @dataclass(frozen=True)
