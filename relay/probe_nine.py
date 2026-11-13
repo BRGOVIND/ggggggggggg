@@ -223,7 +223,9 @@ async def send_step(
     run_id: str,
 ) -> dict:
     call = probe_step(number, indexes, questions, drafts)
-    reason = await budget.reserve(call.estimated_tokens, time.perf_counter() + PACE_WAIT_S)
+    reason = await budget.reserve(
+        call.estimated_tokens, time.perf_counter() + PACE_WAIT_S
+    )
     if reason:
         raise RuntimeError(f"Call {number} stopped before HTTP: {reason}")
     call_id = f"{run_id}-{number}"
