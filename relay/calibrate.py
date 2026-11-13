@@ -72,7 +72,9 @@ def calibration(
     ]
     standin = {
         "base_ms": statistics.median(first),
-        "latency_spread_ms": max(0, (percentile(first, 0.95) - percentile(first, 0.05)) / 2),
+        "latency_spread_ms": max(
+            0, (percentile(first, 0.95) - percentile(first, 0.05)) / 2
+        ),
         "chunk_ms": statistics.median(per_chunk),
         "slow_per_active_ms": 220,
         "rpm_burst_fraction": ASSUMED_RPM_BURST_FRACTION,
