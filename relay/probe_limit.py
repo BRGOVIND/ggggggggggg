@@ -20,9 +20,7 @@ from relay.model import ModelClient, ModelFailure
 from relay.pipeline import Answer
 from relay.run import append_rows, result_row
 
-PROBE_PROMPT = (
-    "Reply with one word: OK."  # Use few tokens to probe RPM without wasting TPM.
-)
+PROBE_PROMPT = "Reply with one word: OK."  # Probe RPM with few tokens.
 PROBE_OUTPUT_TOKENS = 8  # Keep output quota small during the limit experiment.
 RAW_FILE = Path("probe_rpm_raw.jsonl")  # Keep complete headers and any 429 body.
 CALL_TIMEOUT_S = 5  # Keep a short RPM call from blocking the one-minute window.
