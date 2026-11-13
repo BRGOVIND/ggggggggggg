@@ -12,9 +12,7 @@ import httpx
 from relay.budget_guard import DailyBudgetGuard, estimate_guard_tokens
 
 REQUEST_TIMEOUT_S = 30.0  # Slow calls must eventually release a worker.
-CONNECT_TIMEOUT_S = (
-    5.0  # A connection problem should fail before the whole request deadline.
-)
+CONNECT_TIMEOUT_S = 5.0  # Stop slow connection setup before the request deadline.
 LIMIT_HEADER_PREFIX = "x-ratelimit-"  # Preserve provider quota evidence in raw results.
 
 
@@ -243,7 +241,9 @@ class ModelClient:
                 },
             )
         if self.show_usage:
-            measured = f"{actual} actual tokens" if actual is not None else "usage unknown"
+            measured = (
+                f"{actual} actual tokens" if actual is not None else "usage unknown"
+            )
             calls, tokens = self.daily_guard.used_today()
             print(
                 f"Call {call_id}: {outcome}, {measured}; "

@@ -51,7 +51,9 @@ class Budget:
             self.requests.popleft()
         while self.tokens and now - self.tokens[0][0] >= self.minute_window_s:
             self.tokens.popleft()
-        while self.input_tokens and now - self.input_tokens[0][0] >= self.minute_window_s:
+        while (
+            self.input_tokens and now - self.input_tokens[0][0] >= self.minute_window_s
+        ):
             self.input_tokens.popleft()
 
     def _minute_tokens(self) -> int:
